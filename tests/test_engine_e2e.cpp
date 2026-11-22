@@ -368,24 +368,16 @@ TEST(SymbolKeyboardCtrlAltComma) {
     EXPECT_TRUE(o_open.symbol_keyboard_active);
     EXPECT_TRUE(engine.IsSymbolKeyboardActive());
 
-    // Press '=' -> 「, '\' -> 」, ',' -> ，, '/' -> ？
+    // Press '=' -> commits 「 and auto-closes symbol keyboard
     auto o1 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemPlus));
     EXPECT_TRUE(o1.handled);
     EXPECT_EQ(o1.commit_text, u"「");
+    EXPECT_FALSE(o1.symbol_keyboard_active);
+    EXPECT_FALSE(engine.IsSymbolKeyboardActive());
 
-    auto o2 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOem5));
-    EXPECT_TRUE(o2.handled);
-    EXPECT_EQ(o2.commit_text, u"」");
-
-    auto o3 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemComma));
-    EXPECT_TRUE(o3.handled);
-    EXPECT_EQ(o3.commit_text, u"，");
-
-    auto o4 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOem2));
-    EXPECT_TRUE(o4.handled);
-    EXPECT_EQ(o4.commit_text, u"？");
-
-    // Esc closes symbol keyboard
+    // Open again and verify Esc closes without committing
+    engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemComma, ctrl_alt));
+    EXPECT_TRUE(engine.IsSymbolKeyboardActive());
     auto o_esc = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kEscape));
     EXPECT_TRUE(o_esc.handled);
     EXPECT_FALSE(o_esc.symbol_keyboard_active);

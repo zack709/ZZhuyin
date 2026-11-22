@@ -920,10 +920,11 @@ void TextService::OnCandidateMouseSelect(size_t page_offset) {
 void TextService::OnSymbolMouseSelect(char16_t sym) {
     if (!engine_ || sym == 0) return;
 
+    engine_->SetSymbolKeyboardActive(false);
     zzhuyin::EngineOutput out{};
     out.handled = true;
     out.commit_text.assign(1, sym);
-    out.symbol_keyboard_active = engine_->IsSymbolKeyboardActive();
+    out.symbol_keyboard_active = false;
     ApplyOutput(active_context_, out);
 }
 

@@ -452,6 +452,7 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
             }
             if (auto sym = KeyMapper::MapSymbolKeyboard(ev.vk_code)) {
                 out.commit_text.push_back(*sym);
+                symbol_keyboard_active_ = false;
                 out.handled = true;
                 PopulateViewState(out);
                 return out;
