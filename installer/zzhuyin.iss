@@ -28,7 +28,7 @@
 #define AppName "Z注音"
 #define AppPublisher "zack709"
 #define AppURL "https://github.com/zack709/ZZhuyin"
-#define TipId "0404:{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A01}{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A02}"
+#define TipId "0404:{{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A01}{{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A02}"
 
 [Setup]
 #if Arch == "x64"
