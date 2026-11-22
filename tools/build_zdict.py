@@ -33,6 +33,22 @@ CHEWING_WORD_CSV_URL = (
 CHEWING_TSI_CSV_URL = (
     "https://codeberg.org/chewing/libchewing-data/raw/branch/main/dict/chewing/tsi.csv"
 )
+MS_ZHUYIN_ORDER_PATH = Path(__file__).resolve().parent / "ms_zhuyin_order.tsv"
+
+
+def _load_ms_zhuyin_order(path: Path) -> Dict[int, Dict[int, int]]:
+    order_by_bucket: Dict[int, Dict[int, int]] = {}
+    if not path.exists():
+        return order_by_bucket
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line or raw_line.startswith("#"):
+            continue
+        parts = raw_line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        bucket = int(parts[0])
+        order_by_bucket[bucket] = {ord(ch): idx for idx, ch in enumerate(parts[1])}
+    return order_by_bucket
 
 
 def _charset_flags_for_char(ch: str) -> int:
@@ -129,9 +145,23 @@ def build_from_chewing(
         bucket_entries.setdefault(bucket, []).append((freq, is_big5, -order_idx, (cp, flags)))
         order_idx += 1
 
+    override_by_bucket = _load_ms_zhuyin_order(MS_ZHUYIN_ORDER_PATH)
+
     buckets: Dict[int, List[Tuple[int, int]]] = {}
     for bucket, items in bucket_entries.items():
-        items.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        if bucket in override_by_bucket:
+            rank = override_by_bucket[bucket]
+            items.sort(
+                key=lambda x: (
+                    0 if x[3][0] in rank else 1,
+                    rank.get(x[3][0], 0),
+                    -x[0],
+                    -x[1],
+                    -x[2],
+                )
+            )
+        else:
+            items.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
         buckets[bucket] = [x[3] for x in items]
 
     # 3. Build top-N associate phrases per lead character sorted by frequency
