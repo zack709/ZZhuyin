@@ -1,0 +1,30 @@
+# Build directories
+build/
+build-*/
+out/
+
+# IDE & Editor
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+CMakeUserPresets.json
+
+# Compiled binaries & packages
+*.dll
+*.exe
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.zdict
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local Windows 7 reference binaries & dictionaries (do not commit copyrighted files)
+targets/
