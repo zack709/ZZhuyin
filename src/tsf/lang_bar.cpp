@@ -14,31 +14,48 @@ extern void DllRelease();
 namespace {
 
 constexpr DWORD kLangBarSinkCookie = 0x5A5A0001;
+constexpr UINT  kMenuOpenSettings  = 501;
 
-enum MenuId : UINT {
-    kMenuToggleNative    = 101,
-    kMenuToggleFullShape = 102,
-    kMenuLayoutStandard  = 201,
-    kMenuLayoutEten      = 202,
-    kMenuLayoutIbm       = 203,
-    kMenuLayoutGinYieh   = 204,
-    kMenuOrientVertical  = 301,
-    kMenuOrientHoriz     = 302,
-    kMenuToggleAssociate = 401,
-    kMenuToggleBig5Only  = 402,
-    kMenuToggleExtA      = 403,
-    kMenuToggleCns       = 404,
-    kMenuToggleBeep      = 405,
-};
+void ShowRightClickPopup(
+    POINT pt, const RECT* prcArea, const std::function<void()>& open_settings) {
+    if (!open_settings) return;
 
-void AddMenuCheckItem(ITfMenu* menu, UINT id, const wchar_t* text, bool checked) {
-    const DWORD flags = checked ? TF_LBMENUF_CHECKED : 0;
-    menu->AddMenuItem(
-        id, flags, nullptr, nullptr, text, static_cast<ULONG>(wcslen(text)), nullptr);
-}
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, kMenuOpenSettings, L"設定值");
 
-void AddMenuSeparator(ITfMenu* menu) {
-    menu->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, nullptr, 0, nullptr);
+    // A temporary hidden window is required so TrackPopupMenuEx dismisses cleanly on click-away
+    HWND helper = CreateWindowExW(
+        WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP,
+        0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr);
+    if (helper) {
+        SetForegroundWindow(helper);
+        if (pt.x == 0 && pt.y == 0) {
+            GetCursorPos(&pt);
+        }
+
+        // Anchor menu cleanly above the taskbar / icon instead of overlapping the tray icon
+        int x = prcArea ? prcArea->left : pt.x;
+        int y = prcArea ? (prcArea->top - 6) : (pt.y - 24);
+        HMONITOR mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW(mon, &mi) && y > mi.rcWork.bottom - 4) {
+            y = mi.rcWork.bottom - 4;
+        }
+
+        const UINT cmd = static_cast<UINT>(TrackPopupMenuEx(
+            menu,
+            TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
+            x, y, helper, nullptr));
+        PostMessageW(helper, WM_NULL, 0, 0);
+        DestroyWindow(helper);
+
+        if (cmd == kMenuOpenSettings) {
+            open_settings();
+        }
+    }
+    DestroyMenu(menu);
 }
 
 } // namespace
@@ -88,9 +105,9 @@ STDMETHODIMP LangBarButton::GetInfo(TF_LANGBARITEMINFO* pInfo) {
     if (!pInfo) return E_INVALIDARG;
     pInfo->clsidService = kClsidTextService;
     pInfo->guidItem     = kGuidLbiInputMode;
-    pInfo->dwStyle      = TF_LBI_STYLE_BTN_BUTTON | TF_LBI_STYLE_BTN_MENU | TF_LBI_STYLE_SHOWNINTRAY;
+    pInfo->dwStyle      = TF_LBI_STYLE_BTN_BUTTON | TF_LBI_STYLE_SHOWNINTRAY;
     pInfo->ulSort       = 0;
-    wcsncpy_s(pInfo->szDescription, L"Z注音 中英切換", _TRUNCATE);
+    wcsncpy_s(pInfo->szDescription, L"Z注音", _TRUNCATE);
     return S_OK;
 }
 
@@ -115,81 +132,28 @@ STDMETHODIMP LangBarButton::GetTooltipString(BSTR* pbstrToolTip) {
     return *pbstrToolTip ? S_OK : E_OUTOFMEMORY;
 }
 
-STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT /*pt*/, const RECT* /*prcArea*/) {
+STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT pt, const RECT* prcArea) {
     if (click == TF_LBI_CLK_LEFT && cb_.toggle_native) {
         cb_.toggle_native();
         NotifyUpdate();
+    } else if (click == TF_LBI_CLK_RIGHT) {
+        ShowRightClickPopup(pt, prcArea, cb_.open_settings);
     }
     return S_OK;
 }
 
 STDMETHODIMP LangBarButton::InitMenu(ITfMenu* pMenu) {
     if (!pMenu) return E_INVALIDARG;
-
-    const bool native = cb_.is_native ? cb_.is_native() : true;
-    const bool full   = cb_.is_full_shape ? cb_.is_full_shape() : false;
-    const PersistedConfig cfg = cb_.get_config ? cb_.get_config() : PersistedConfig{};
-
-    AddMenuCheckItem(pMenu, kMenuToggleNative, native ? L"中文模式（點擊切換英文）" : L"英文模式（點擊切換中文）", native);
-    AddMenuCheckItem(pMenu, kMenuToggleFullShape, L"全形模式", full);
-    AddMenuSeparator(pMenu);
-
-    AddMenuCheckItem(pMenu, kMenuLayoutStandard, L"鍵盤：標準大千", cfg.engine.layout == zzhuyin::KeyboardLayout::Standard);
-    AddMenuCheckItem(pMenu, kMenuLayoutEten,     L"鍵盤：倚天",     cfg.engine.layout == zzhuyin::KeyboardLayout::Eten);
-    AddMenuCheckItem(pMenu, kMenuLayoutIbm,      L"鍵盤：IBM",      cfg.engine.layout == zzhuyin::KeyboardLayout::Ibm);
-    AddMenuCheckItem(pMenu, kMenuLayoutGinYieh,  L"鍵盤：精業",     cfg.engine.layout == zzhuyin::KeyboardLayout::GinYieh);
-    AddMenuSeparator(pMenu);
-
-    AddMenuCheckItem(pMenu, kMenuOrientVertical, L"候選窗：直排", cfg.engine.orientation == zzhuyin::CandidateOrientation::Vertical);
-    AddMenuCheckItem(pMenu, kMenuOrientHoriz,    L"候選窗：橫排", cfg.engine.orientation == zzhuyin::CandidateOrientation::Horizontal);
-    AddMenuSeparator(pMenu);
-
-    AddMenuCheckItem(pMenu, kMenuToggleAssociate, L"相關字詞（Shift+1..9）", cfg.engine.prompt_associate_phrase);
-    AddMenuCheckItem(pMenu, kMenuToggleBig5Only,  L"僅輸出 Big5 字元",      cfg.engine.charset_filter.output_big5_only);
-    AddMenuCheckItem(pMenu, kMenuToggleExtA,      L"包含 CJK Ext-A 字元",   cfg.engine.charset_filter.include_ext_a);
-    AddMenuCheckItem(pMenu, kMenuToggleCns,       L"允許 CNS 罕用破音",     cfg.engine.charset_filter.allow_cns);
-    AddMenuCheckItem(pMenu, kMenuToggleBeep,      L"不合法注音提示音",      cfg.engine.enable_warning_beep);
-
+    constexpr wchar_t kText[] = L"設定值";
+    pMenu->AddMenuItem(
+        kMenuOpenSettings, 0, nullptr, nullptr,
+        kText, static_cast<ULONG>(wcslen(kText)), nullptr);
     return S_OK;
 }
 
 STDMETHODIMP LangBarButton::OnMenuSelect(UINT wID) {
-    if (wID == kMenuToggleNative) {
-        if (cb_.toggle_native) cb_.toggle_native();
-        NotifyUpdate();
-        return S_OK;
-    }
-    if (wID == kMenuToggleFullShape) {
-        if (cb_.toggle_full_shape) cb_.toggle_full_shape();
-        NotifyUpdate();
-        return S_OK;
-    }
-
-    if (!cb_.get_config || !cb_.update_config) {
-        return S_OK;
-    }
-
-    PersistedConfig cfg = cb_.get_config();
-    bool changed = true;
-
-    switch (wID) {
-        case kMenuLayoutStandard:  cfg.engine.layout = zzhuyin::KeyboardLayout::Standard; break;
-        case kMenuLayoutEten:      cfg.engine.layout = zzhuyin::KeyboardLayout::Eten; break;
-        case kMenuLayoutIbm:       cfg.engine.layout = zzhuyin::KeyboardLayout::Ibm; break;
-        case kMenuLayoutGinYieh:   cfg.engine.layout = zzhuyin::KeyboardLayout::GinYieh; break;
-        case kMenuOrientVertical:  cfg.engine.orientation = zzhuyin::CandidateOrientation::Vertical; break;
-        case kMenuOrientHoriz:     cfg.engine.orientation = zzhuyin::CandidateOrientation::Horizontal; break;
-        case kMenuToggleAssociate: cfg.engine.prompt_associate_phrase = !cfg.engine.prompt_associate_phrase; break;
-        case kMenuToggleBig5Only:  cfg.engine.charset_filter.output_big5_only = !cfg.engine.charset_filter.output_big5_only; break;
-        case kMenuToggleExtA:      cfg.engine.charset_filter.include_ext_a = !cfg.engine.charset_filter.include_ext_a; break;
-        case kMenuToggleCns:       cfg.engine.charset_filter.allow_cns = !cfg.engine.charset_filter.allow_cns; break;
-        case kMenuToggleBeep:      cfg.engine.enable_warning_beep = !cfg.engine.enable_warning_beep; break;
-        default:                   changed = false; break;
-    }
-
-    if (changed) {
-        cb_.update_config(cfg);
-        NotifyUpdate();
+    if (wID == kMenuOpenSettings && cb_.open_settings) {
+        cb_.open_settings();
     }
     return S_OK;
 }
@@ -222,41 +186,61 @@ HICON LangBarButton::RenderModeIcon(bool is_native, bool is_full_shape) {
         return nullptr;
     }
 
-    // Clear with solid badge background
+    // Classic Win7 framed keycap tile silhouette with modern Teal/Ivory (Chinese) & Slate (English) palette
     auto* pixels = static_cast<uint32_t*>(bits);
-    const uint32_t bg_argb = is_native ? 0xFF0078D7u : 0xFF4A4A4Au;
-    for (int i = 0; i < kSize * kSize; ++i) {
-        pixels[i] = bg_argb;
+    const uint32_t outer_border = is_native ? 0xFF134E4Au : 0xFF334155u; // Deep Teal / Dark Slate
+    const uint32_t inner_rim    = is_native ? 0xFF99F6E4u : 0xFFCBD5E1u; // Soft Mint / Cool Rim
+    const uint32_t inner_bg     = is_native ? 0xFFF0FDFAu : 0xFFF1F5F9u; // Crisp Ice-Ivory / Light Slate
+
+    for (int y = 0; y < kSize; ++y) {
+        for (int x = 0; x < kSize; ++x) {
+            uint32_t col = inner_bg;
+            if (x < 2 || x >= kSize - 2 || y < 2 || y >= kSize - 2) {
+                col = outer_border;
+            } else if (x == 2 || x == kSize - 3 || y == 2 || y == kSize - 3) {
+                col = inner_rim;
+            }
+            pixels[y * kSize + x] = col;
+        }
     }
 
     HGDIOBJ old_bmp = SelectObject(mem_dc, color_bmp);
 
     LOGFONTW lf{};
-    lf.lfHeight = -22;
-    lf.lfWeight = FW_BOLD;
+    lf.lfHeight = -23;
+    lf.lfWeight = FW_EXTRABOLD;
     lf.lfCharSet = DEFAULT_CHARSET;
-    lf.lfQuality = NONANTIALIASED_QUALITY; // Keeps alpha channel clean for GDI text
+    lf.lfQuality = NONANTIALIASED_QUALITY;
     wcsncpy_s(lf.lfFaceName, L"Microsoft JhengHei UI", _TRUNCATE);
     HFONT font = CreateFontIndirectW(&lf);
     HGDIOBJ old_font = SelectObject(mem_dc, font);
 
     SetBkMode(mem_dc, TRANSPARENT);
-    SetTextColor(mem_dc, RGB(255, 255, 255));
 
-    RECT rc{0, 0, kSize, kSize};
-    const wchar_t* glyph = is_native ? L"中" : L"英";
+    const wchar_t* glyph = is_native ? L"ㄅ" : L"英";
+    RECT rc{0, -1, kSize, kSize - 1};
+
+    // Subtle bright halo behind the glyph (matching the classic Win7 ㄅ icon aesthetic)
+    SetTextColor(mem_dc, RGB(255, 255, 255));
+    const POINT offsets[] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    for (const auto& off : offsets) {
+        RECT hrc{rc.left + off.x, rc.top + off.y, rc.right + off.x, rc.bottom + off.y};
+        DrawTextW(mem_dc, glyph, 1, &hrc, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+    }
+
+    // Main bold glyph: Vibrant Deep Teal for ㄅ, Charcoal Slate for 英
+    SetTextColor(mem_dc, is_native ? RGB(15, 118, 110) : RGB(51, 65, 85));
     DrawTextW(mem_dc, glyph, 1, &rc, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 
-    // Small corner dot to indicate full-shape mode
+    // Small warm amber dot at bottom-right inside the tile when Full-Shape is active
     if (is_full_shape) {
-        for (int y = kSize - 6; y < kSize - 2; ++y) {
-            for (int x = kSize - 6; x < kSize - 2; ++x) {
-                pixels[y * kSize + x] = 0xFFFFD700u;
+        for (int y = kSize - 7; y < kSize - 3; ++y) {
+            for (int x = kSize - 7; x < kSize - 3; ++x) {
+                pixels[y * kSize + x] = 0xFFF59E0Bu;
             }
         }
     }
 
-    // Ensure opaque alpha on all drawn pixels
     for (int i = 0; i < kSize * kSize; ++i) {
         pixels[i] |= 0xFF000000u;
     }
@@ -289,7 +273,7 @@ STDMETHODIMP LangBarButton::GetIcon(HICON* phIcon) {
 STDMETHODIMP LangBarButton::GetText(BSTR* pbstrText) {
     if (!pbstrText) return E_INVALIDARG;
     const bool native = cb_.is_native ? cb_.is_native() : true;
-    *pbstrText = SysAllocString(native ? L"中" : L"英");
+    *pbstrText = SysAllocString(native ? L"ㄅ" : L"英");
     return *pbstrText ? S_OK : E_OUTOFMEMORY;
 }
 

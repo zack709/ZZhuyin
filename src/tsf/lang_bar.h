@@ -16,6 +16,7 @@ struct LangBarCallbacks {
     std::function<void()> toggle_native;
     std::function<void()> toggle_full_shape;
     std::function<void(const PersistedConfig&)> update_config;
+    std::function<void()> open_settings;
 };
 
 class LangBarButton final
@@ -49,9 +50,9 @@ public:
 
     void NotifyUpdate();
 
-private:
     static HICON RenderModeIcon(bool is_native, bool is_full_shape);
 
+private:
     std::atomic<long> ref_count_{1};
     LangBarCallbacks cb_;
     ITfLangBarItemSink* sink_ = nullptr;

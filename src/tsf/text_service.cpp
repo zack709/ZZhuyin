@@ -5,7 +5,9 @@
 #include "tsf/display_attr.h"
 #include "tsf/edit_session.h"
 #include "tsf/guids.h"
+#include "tsf/settings_dlg.h"
 
+#include <oleauto.h>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -45,6 +47,44 @@ std::filesystem::path GetSystemDirectoryPath() {
     return std::filesystem::path(buf);
 }
 
+std::u16string ConvertToSimplified(const std::u16string& text) {
+    if (text.empty()) return text;
+    const wchar_t* src = reinterpret_cast<const wchar_t*>(text.data());
+    const int src_len = static_cast<int>(text.size());
+    const int req = LCMapStringEx(
+        L"zh-TW", LCMAP_SIMPLIFIED_CHINESE,
+        src, src_len, nullptr, 0, nullptr, nullptr, 0);
+    if (req <= 0) return text;
+
+    std::u16string out(static_cast<size_t>(req), u'\0');
+    const int written = LCMapStringEx(
+        L"zh-TW", LCMAP_SIMPLIFIED_CHINESE,
+        src, src_len,
+        reinterpret_cast<wchar_t*>(out.data()), req,
+        nullptr, nullptr, 0);
+    if (written <= 0) return text;
+    out.resize(static_cast<size_t>(written));
+    return out;
+}
+
+zzhuyin::EngineOutput ApplyOutputScript(
+    const zzhuyin::EngineOutput& in, bool to_simplified) {
+    if (!to_simplified) return in;
+    zzhuyin::EngineOutput out = in;
+    if (!out.commit_text.empty()) {
+        out.commit_text = ConvertToSimplified(out.commit_text);
+    }
+    if (!out.composition.empty()) {
+        out.composition = ConvertToSimplified(out.composition);
+    }
+    if (out.candidates.active) {
+        for (auto& item : out.candidates.page_items) {
+            item = ConvertToSimplified(item);
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 TextService::TextService() {
@@ -81,6 +121,8 @@ STDMETHODIMP TextService::QueryInterface(REFIID riid, void** ppvObj) {
         *ppvObj = static_cast<ITfDisplayAttributeProvider*>(this);
     } else if (IsEqualIID(riid, IID_ITfCompartmentEventSink)) {
         *ppvObj = static_cast<ITfCompartmentEventSink*>(this);
+    } else if (IsEqualIID(riid, IID_ITfFunction) || IsEqualIID(riid, IID_ITfFnConfigure)) {
+        *ppvObj = static_cast<ITfFnConfigure*>(this);
     } else {
         return E_NOINTERFACE;
     }
@@ -130,6 +172,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD /
     candidate_wnd_.Create(g_hInst);
     candidate_wnd_.SetOrientation(config_.engine.orientation);
     candidate_wnd_.SetFontSizePt(config_.ui.font_size_pt);
+    candidate_wnd_.SetDarkTheme(config_.ui.dark_theme);
     candidate_wnd_.SetSelectCallback([this](size_t page_offset) {
         OnCandidateMouseSelect(page_offset);
     });
@@ -400,6 +443,9 @@ void TextService::InitLangBar() {
         ApplyPersistedConfig(cfg);
         ConfigStore::Save(cfg);
     };
+    cbs.open_settings = [this]() {
+        OpenSettingsDialog();
+    };
 
     lang_bar_btn_ = new (std::nothrow) LangBarButton(std::move(cbs));
     if (lang_bar_btn_) {
@@ -432,6 +478,7 @@ void TextService::ApplyPersistedConfig(const PersistedConfig& cfg) {
     }
     candidate_wnd_.SetOrientation(cfg.engine.orientation);
     candidate_wnd_.SetFontSizePt(cfg.ui.font_size_pt);
+    candidate_wnd_.SetDarkTheme(cfg.ui.dark_theme);
 }
 
 // ITfThreadMgrEventSink
@@ -443,6 +490,7 @@ STDMETHODIMP TextService::OnPopContext(ITfContext* /*pic*/) { return S_OK; }
 STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* pdimFocus, ITfDocumentMgr* /*pdimPrevFocus*/) {
     if (engine_) {
         engine_->Reset();
+        ApplyPersistedConfig(ConfigStore::Load());
     }
     candidate_wnd_.Hide();
 
@@ -606,16 +654,19 @@ void TextService::ApplyOutput(ITfContext* context, const zzhuyin::EngineOutput& 
         active_context_->AddRef();
     }
 
+    const zzhuyin::EngineOutput final_out =
+        ApplyOutputScript(out, config_.engine.output_simplified);
+
     const bool need_edit_session =
-        !out.commit_text.empty() ||
-        !out.composition.empty() ||
+        !final_out.commit_text.empty() ||
+        !final_out.composition.empty() ||
         (composition_ != nullptr) ||
-        out.candidates.active;
+        final_out.candidates.active;
 
     if (need_edit_session) {
         auto* session = new (std::nothrow) CallbackEditSession(
-            [this, context, out](TfEditCookie ec) -> HRESULT {
-                return ApplyOutputInEditSession(ec, context, out);
+            [this, context, final_out](TfEditCookie ec) -> HRESULT {
+                return ApplyOutputInEditSession(ec, context, final_out);
             });
         if (session) {
             HRESULT hr_session = S_OK;
@@ -849,6 +900,26 @@ STDMETHODIMP TextService::GetDisplayAttributeInfo(
         return S_OK;
     }
     return E_INVALIDARG;
+}
+
+void TextService::OpenSettingsDialog() {
+    this->AddRef();
+    std::shared_ptr<TextService> self(this, [](TextService* p) { p->Release(); });
+    ShowSettingsDialog(g_hInst, [self](const PersistedConfig& cfg) {
+        self->ApplyPersistedConfig(cfg);
+    });
+}
+
+// ITfFunction / ITfFnConfigure
+STDMETHODIMP TextService::GetDisplayName(BSTR* pbstrName) {
+    if (!pbstrName) return E_INVALIDARG;
+    *pbstrName = SysAllocString(L"Z注音 設定");
+    return *pbstrName ? S_OK : E_OUTOFMEMORY;
+}
+
+STDMETHODIMP TextService::Show(HWND /*hwndParent*/, LANGID /*langid*/, REFGUID /*rguidProfile*/) {
+    OpenSettingsDialog();
+    return S_OK;
 }
 
 } // namespace zzhuyin::tsf

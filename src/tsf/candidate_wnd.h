@@ -21,6 +21,7 @@ public:
 
     void SetOrientation(zzhuyin::CandidateOrientation orientation);
     void SetFontSizePt(int font_size_pt);
+    void SetDarkTheme(bool dark);
 
     void Update(const CandidateView& view, const RECT& caret_rect);
     void Hide();
@@ -45,6 +46,7 @@ private:
     HFONT font_ = nullptr;
     UINT dpi_ = 96;
     int font_size_pt_ = 12;
+    bool dark_theme_ = false;
     zzhuyin::CandidateOrientation orientation_ = zzhuyin::CandidateOrientation::Vertical;
 
     CandidateView view_{};

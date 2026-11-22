@@ -8,6 +8,7 @@ namespace zzhuyin::tsf {
 
 struct UiConfig {
     int font_size_pt = 12;
+    bool dark_theme = false;
 };
 
 struct PersistedConfig {

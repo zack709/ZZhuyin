@@ -66,11 +66,17 @@ PersistedConfig ConfigStore::Load(const wchar_t* sub_key) {
     if (ReadDword(hKey, L"RightShiftToggleMode", v)) {
         cfg.engine.right_shift_toggle_mode = (v != 0);
     }
+    if (ReadDword(hKey, L"OutputSimplified", v)) {
+        cfg.engine.output_simplified = (v != 0);
+    }
     if (ReadDword(hKey, L"CandidateOrientation", v) && v <= 1) {
         cfg.engine.orientation = static_cast<zzhuyin::CandidateOrientation>(v);
     }
     if (ReadDword(hKey, L"FontSizePt", v)) {
         cfg.ui.font_size_pt = std::clamp(static_cast<int>(v), 9, 28);
+    }
+    if (ReadDword(hKey, L"DarkTheme", v)) {
+        cfg.ui.dark_theme = (v != 0);
     }
 
     RegCloseKey(hKey);
@@ -98,8 +104,10 @@ bool ConfigStore::Save(const PersistedConfig& cfg, const wchar_t* sub_key) {
     ok &= WriteDword(hKey, L"EnableWarningBeep", cfg.engine.enable_warning_beep ? 1u : 0u);
     ok &= WriteDword(hKey, L"LeftShiftToggleMode", cfg.engine.left_shift_toggle_mode ? 1u : 0u);
     ok &= WriteDword(hKey, L"RightShiftToggleMode", cfg.engine.right_shift_toggle_mode ? 1u : 0u);
+    ok &= WriteDword(hKey, L"OutputSimplified", cfg.engine.output_simplified ? 1u : 0u);
     ok &= WriteDword(hKey, L"CandidateOrientation", static_cast<DWORD>(cfg.engine.orientation));
     ok &= WriteDword(hKey, L"FontSizePt", static_cast<DWORD>(std::clamp(cfg.ui.font_size_pt, 9, 28)));
+    ok &= WriteDword(hKey, L"DarkTheme", cfg.ui.dark_theme ? 1u : 0u);
 
     RegCloseKey(hKey);
     return ok;

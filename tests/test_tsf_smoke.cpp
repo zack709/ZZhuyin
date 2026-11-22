@@ -1,6 +1,7 @@
 #include "tsf/config_reg.h"
 #include "tsf/guids.h"
 
+#include <ctffunc.h>
 #include <msctf.h>
 #include <windows.h>
 
@@ -73,6 +74,8 @@ int main() {
     ok &= check_qi(IID_ITfKeyEventSink, "ITfKeyEventSink");
     ok &= check_qi(IID_ITfCompositionSink, "ITfCompositionSink");
     ok &= check_qi(IID_ITfDisplayAttributeProvider, "ITfDisplayAttributeProvider");
+    ok &= check_qi(IID_ITfCompartmentEventSink, "ITfCompartmentEventSink");
+    ok &= check_qi(IID_ITfFnConfigure, "ITfFnConfigure");
 
     // Verify display attribute provider enumeration
     ITfDisplayAttributeProvider* dap = nullptr;
@@ -117,8 +120,10 @@ int main() {
         in_cfg.engine.layout = zzhuyin::KeyboardLayout::Eten;
         in_cfg.engine.prompt_associate_phrase = true;
         in_cfg.engine.charset_filter.include_ext_a = true;
+        in_cfg.engine.output_simplified = true;
         in_cfg.engine.orientation = zzhuyin::CandidateOrientation::Horizontal;
         in_cfg.ui.font_size_pt = 16;
+        in_cfg.ui.dark_theme = true;
 
         if (!zzhuyin::tsf::ConfigStore::Save(in_cfg, kTestKey)) {
             std::cerr << "ConfigStore::Save failed\n";
@@ -128,8 +133,10 @@ int main() {
             if (out_cfg.engine.layout != zzhuyin::KeyboardLayout::Eten ||
                 !out_cfg.engine.prompt_associate_phrase ||
                 !out_cfg.engine.charset_filter.include_ext_a ||
+                !out_cfg.engine.output_simplified ||
                 out_cfg.engine.orientation != zzhuyin::CandidateOrientation::Horizontal ||
-                out_cfg.ui.font_size_pt != 16) {
+                out_cfg.ui.font_size_pt != 16 ||
+                !out_cfg.ui.dark_theme) {
                 std::cerr << "ConfigStore round-trip mismatch\n";
                 ok = false;
             }

@@ -106,6 +106,7 @@ struct EngineConfig {
     bool enable_warning_beep           = true;  // 0x011b
     bool left_shift_toggle_mode        = true;  // 0x0120
     bool right_shift_toggle_mode       = false; // 0x0121
+    bool output_simplified             = false; // 0x012d (輸出字種: false=繁體字, true=简体字)
     CandidateOrientation orientation   = CandidateOrientation::Vertical; // 0x0145
 };
 

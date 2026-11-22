@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ZZhuyin VERSION 0.1.0 LANGUAGES CXX)
+project(ZZhuyin VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,10 +32,12 @@ if(WIN32)
         src/tsf/candidate_wnd.cpp
         src/tsf/lang_bar.cpp
         src/tsf/config_reg.cpp
+        src/tsf/settings_dlg.cpp
         src/tsf/zzhuyin_tsf.def
     )
     target_link_libraries(zzhuyin_tsf PRIVATE
         zzhuyin_core
+        comctl32
         ole32
         oleaut32
         advapi32

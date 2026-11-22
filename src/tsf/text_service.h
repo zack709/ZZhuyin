@@ -6,6 +6,7 @@
 #include "tsf/config_reg.h"
 #include "tsf/lang_bar.h"
 
+#include <ctffunc.h>
 #include <msctf.h>
 #include <atomic>
 #include <memory>
@@ -18,7 +19,8 @@ class TextService final
     , public ITfKeyEventSink
     , public ITfCompositionSink
     , public ITfDisplayAttributeProvider
-    , public ITfCompartmentEventSink {
+    , public ITfCompartmentEventSink
+    , public ITfFnConfigure {
 public:
     TextService();
     ~TextService();
@@ -60,7 +62,12 @@ public:
     // ITfCompartmentEventSink
     STDMETHODIMP OnChange(REFGUID rguid) override;
 
+    // ITfFunction / ITfFnConfigure (Windows Settings -> 鍵盤選項)
+    STDMETHODIMP GetDisplayName(BSTR* pbstrName) override;
+    STDMETHODIMP Show(HWND hwndParent, LANGID langid, REFGUID rguidProfile) override;
+
 private:
+    void OpenSettingsDialog();
     bool InitDictionary();
     bool InitDisplayAttributeAtom();
     bool InitThreadMgrEventSink();

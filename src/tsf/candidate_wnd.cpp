@@ -54,6 +54,15 @@ void CandidateWindow::SetFontSizePt(int font_size_pt) {
     }
 }
 
+void CandidateWindow::SetDarkTheme(bool dark) {
+    if (dark_theme_ != dark) {
+        dark_theme_ = dark;
+        if (hwnd_ && view_.active) {
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+    }
+}
+
 void CandidateWindow::RebuildFont() {
     if (font_) {
         DeleteObject(font_);
@@ -259,7 +268,14 @@ void CandidateWindow::Paint(HDC hdc) {
     HBITMAP mem_bmp = CreateCompatibleBitmap(hdc, width, height);
     HGDIOBJ old_bmp = SelectObject(mem_dc, mem_bmp);
 
-    HBRUSH bg_brush = CreateSolidBrush(RGB(252, 252, 252));
+    const COLORREF bg_col       = dark_theme_ ? RGB(32, 32, 32)   : RGB(252, 252, 252);
+    const COLORREF sel_bg_col   = dark_theme_ ? RGB(15, 118, 110) : RGB(0, 120, 215);
+    const COLORREF hov_bg_col   = dark_theme_ ? RGB(52, 52, 52)   : RGB(229, 241, 251);
+    const COLORREF text_col     = dark_theme_ ? RGB(240, 240, 240): RGB(32, 32, 32);
+    const COLORREF hov_text_col = dark_theme_ ? RGB(255, 255, 255): RGB(24, 24, 24);
+    const COLORREF footer_col   = dark_theme_ ? RGB(165, 165, 165): RGB(110, 110, 110);
+
+    HBRUSH bg_brush = CreateSolidBrush(bg_col);
     FillRect(mem_dc, &rc, bg_brush);
     DeleteObject(bg_brush);
 
@@ -276,17 +292,17 @@ void CandidateWindow::Paint(HDC hdc) {
         const bool hovered  = (!selected && static_cast<int>(i) == hover_index_);
 
         if (selected) {
-            HBRUSH sel_brush = CreateSolidBrush(RGB(0, 120, 215));
+            HBRUSH sel_brush = CreateSolidBrush(sel_bg_col);
             FillRect(mem_dc, &item_rc, sel_brush);
             DeleteObject(sel_brush);
             SetTextColor(mem_dc, RGB(255, 255, 255));
         } else if (hovered) {
-            HBRUSH hov_brush = CreateSolidBrush(RGB(229, 241, 251));
+            HBRUSH hov_brush = CreateSolidBrush(hov_bg_col);
             FillRect(mem_dc, &item_rc, hov_brush);
             DeleteObject(hov_brush);
-            SetTextColor(mem_dc, RGB(24, 24, 24));
+            SetTextColor(mem_dc, hov_text_col);
         } else {
-            SetTextColor(mem_dc, RGB(32, 32, 32));
+            SetTextColor(mem_dc, text_col);
         }
 
         const std::wstring line = FormatItemText(i);
@@ -297,7 +313,7 @@ void CandidateWindow::Paint(HDC hdc) {
     }
 
     const std::wstring footer = FormatFooterText();
-    SetTextColor(mem_dc, RGB(110, 110, 110));
+    SetTextColor(mem_dc, footer_col);
     DrawTextW(mem_dc, footer.c_str(), static_cast<int>(footer.size()), &footer_rect_,
               DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_NOPREFIX);
 
