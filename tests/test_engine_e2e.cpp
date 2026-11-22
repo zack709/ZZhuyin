@@ -85,7 +85,16 @@ TEST(T3_1_InvalidCombinationBeepAndRevertTone) {
     EXPECT_EQ(engine.State(), zzhuyin::EngineState::Composing);
 }
 
+#define REQUIRE_TEST_DICT()                                                    \
+    do {                                                                       \
+        if (!TestDict().IsLoaded()) {                                          \
+            std::cout << "  [SKIP] IMTCPH.IMD not present\n";                  \
+            return;                                                            \
+        }                                                                      \
+    } while (0)
+
 TEST(T4_1_SingleCandidateAutoCommitNoAssociate) {
+    REQUIRE_TEST_DICT();
     zzhuyin::EngineConfig cfg;
     cfg.prompt_associate_phrase = false;
     zzhuyin::ZhuyinEngine engine(TestDict(), cfg);
@@ -102,6 +111,7 @@ TEST(T4_1_SingleCandidateAutoCommitNoAssociate) {
 }
 
 TEST(T4_2_SingleCandidateAutoCommitWithAssociate) {
+    REQUIRE_TEST_DICT();
     zzhuyin::EngineConfig cfg;
     cfg.prompt_associate_phrase = true;
     zzhuyin::ZhuyinEngine engine(TestDict(), cfg);
@@ -119,6 +129,7 @@ TEST(T4_2_SingleCandidateAutoCommitWithAssociate) {
 }
 
 TEST(T5_6_DigitSelectAndEscCancel) {
+    REQUIRE_TEST_DICT();
     zzhuyin::ZhuyinEngine engine(TestDict());
 
     // ㄉ(2) ㄜ(k) ˙(7) -> 的, 得, 地
@@ -147,6 +158,7 @@ TEST(T5_6_DigitSelectAndEscCancel) {
 }
 
 TEST(T6_1_And_T6_2_AssociatePhraseSelectionVsTyping) {
+    REQUIRE_TEST_DICT();
     zzhuyin::EngineConfig cfg;
     cfg.prompt_associate_phrase = true;
     zzhuyin::ZhuyinEngine engine(TestDict(), cfg);
@@ -197,6 +209,7 @@ TEST(T7_1_BackspaceRemovesHighestSlot) {
 }
 
 TEST(T7_2_EnterAutoTone1) {
+    REQUIRE_TEST_DICT();
     zzhuyin::ZhuyinEngine engine(TestDict());
 
     // ㄓ(5) ㄨ(j) ㄥ(/) + Enter -> lookup ㄓㄨㄥ (tone 1), first candidate 中
@@ -270,6 +283,7 @@ TEST(T8_3_PunctuationShortcutsAndDirectFullWidth) {
 }
 
 TEST(T9_1_MultiKeyboardLayouts) {
+    REQUIRE_TEST_DICT();
     // ETen: d(ㄉ) r(ㄜ) 1(˙) -> 的, 得, 地
     {
         zzhuyin::EngineConfig cfg;
@@ -329,6 +343,7 @@ TEST(CtrlSpaceTogglesNativeAndEnglishMode) {
 }
 
 TEST(DefaultSelectFirstCandidateWhenContinuingTyping) {
+    REQUIRE_TEST_DICT();
     zzhuyin::ZhuyinEngine engine(TestDict());
 
     // Type ㄓ(5) ㄨ(j) ˋ(4) -> candidate window opens, #1 is 住 (previewed in composition)

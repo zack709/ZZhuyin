@@ -16,12 +16,140 @@ Modes:
 """
 
 import argparse
+import csv
+import io
 import struct
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 from parse_dict import encode_zhuyin, load_imechlex
+
+
+CHEWING_WORD_CSV_URL = (
+    "https://codeberg.org/chewing/libchewing-data/raw/branch/main/dict/chewing/word.csv"
+)
+CHEWING_TSI_CSV_URL = (
+    "https://codeberg.org/chewing/libchewing-data/raw/branch/main/dict/chewing/tsi.csv"
+)
+
+
+def _charset_flags_for_char(ch: str) -> int:
+    cp = ord(ch)
+    flags = 0
+    try:
+        ch.encode("cp950")
+        flags |= 0x02  # Big5
+    except UnicodeEncodeError:
+        pass
+    if 0x3400 <= cp <= 0x4DBF:
+        flags |= 0x04  # CJK Ext-A
+    return flags
+
+
+def _download_utf8(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "ZZhuyin-Builder/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8")
+
+
+def build_from_chewing(
+    word_csv_text: str, tsi_csv_text: str, max_assoc_per_lead: int = 36
+) -> Tuple[Dict[int, List[Tuple[int, int]]], Dict[int, List[str]]]:
+    # 1. Extract single-char frequencies and multi-char associate phrases from tsi.csv
+    char_freq: Dict[Tuple[int, int], int] = {}
+    assoc_raw: Dict[int, List[Tuple[int, str]]] = {}
+
+    for row in csv.reader(io.StringIO(tsi_csv_text)):
+        if not row or row[0].startswith("#") or len(row) < 3:
+            continue
+        phrase = row[0].strip()
+        try:
+            freq = int(row[1].strip())
+        except ValueError:
+            freq = 0
+        reading = row[2].strip()
+        if not phrase:
+            continue
+
+        if len(phrase) == 1 and ord(phrase) <= 0xFFFF:
+            try:
+                bucket = encode_zhuyin(reading) >> 2
+            except ValueError:
+                continue
+            key = (bucket, ord(phrase))
+            if freq > char_freq.get(key, -1):
+                char_freq[key] = freq
+        elif 2 <= len(phrase) <= 4 and all(ord(c) <= 0xFFFF for c in phrase):
+            lead = ord(phrase[0])
+            tail = phrase[1:]
+            assoc_raw.setdefault(lead, []).append((freq, tail))
+
+    # 2. Collect all BMP single characters from word.csv (+ any single-char entries in tsi.csv)
+    bucket_entries: Dict[int, List[Tuple[int, int, int, int]]] = {}
+    seen: Dict[int, set] = {}
+    order_idx = 0
+
+    for row in csv.reader(io.StringIO(word_csv_text)):
+        if not row or row[0].startswith("#") or len(row) < 3:
+            continue
+        ch = row[0].strip()
+        if len(ch) != 1 or ord(ch) > 0xFFFF:
+            continue
+        reading = row[2].strip()
+        try:
+            bucket = encode_zhuyin(reading) >> 2
+        except ValueError:
+            continue
+        cp = ord(ch)
+        s = seen.setdefault(bucket, set())
+        if cp in s:
+            continue
+        s.add(cp)
+        freq = char_freq.get((bucket, cp), 0)
+        flags = _charset_flags_for_char(ch)
+        # Prefer Big5 + higher tsi.csv frequency, preserving word.csv order on ties
+        is_big5 = 1 if (flags & 0x02) else 0
+        bucket_entries.setdefault(bucket, []).append((freq, is_big5, -order_idx, (cp, flags)))
+        order_idx += 1
+
+    # Add any single-char reading from tsi.csv that was not in word.csv
+    for (bucket, cp), freq in char_freq.items():
+        ch = chr(cp)
+        # Skip standalone Bopomofo/tone symbols
+        if 0x3105 <= cp <= 0x312F or ch in "ˊˇˋ˙":
+            continue
+        s = seen.setdefault(bucket, set())
+        if cp in s:
+            continue
+        s.add(cp)
+        flags = _charset_flags_for_char(ch)
+        is_big5 = 1 if (flags & 0x02) else 0
+        bucket_entries.setdefault(bucket, []).append((freq, is_big5, -order_idx, (cp, flags)))
+        order_idx += 1
+
+    buckets: Dict[int, List[Tuple[int, int]]] = {}
+    for bucket, items in bucket_entries.items():
+        items.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        buckets[bucket] = [x[3] for x in items]
+
+    # 3. Build top-N associate phrases per lead character sorted by frequency
+    assoc_map: Dict[int, List[str]] = {}
+    for lead, pairs in assoc_raw.items():
+        pairs.sort(key=lambda x: x[0], reverse=True)
+        dedup: List[str] = []
+        seen_tails = set()
+        for _, tail in pairs:
+            if tail not in seen_tails:
+                seen_tails.add(tail)
+                dedup.append(tail)
+                if len(dedup) >= max_assoc_per_lead:
+                    break
+        if dedup:
+            assoc_map[lead] = dedup
+
+    return buckets, assoc_map
 
 
 def write_zdict(
@@ -161,6 +289,11 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--from-text", type=Path, help="Input UTF-8 TSV Bopomofo table")
     group.add_argument("--from-imd", type=Path, help="Input Windows 7 IMTCPH.IMD file")
+    group.add_argument(
+        "--fetch-chewing",
+        action="store_true",
+        help="Download open-source libchewing-data (LGPL-2.1) and build .zdict",
+    )
     parser.add_argument("--assoc-text", type=Path, help="Optional UTF-8 TSV associate table")
     parser.add_argument("--lcptr", type=Path, help="Optional lcptr.tbl (with --from-imd)")
     parser.add_argument("--lcphrase", type=Path, help="Optional lcphrase.tbl (with --from-imd)")
@@ -169,6 +302,11 @@ def main() -> None:
 
     if args.from_text:
         buckets, assoc_map = build_from_text(args.from_text, args.assoc_text)
+    elif args.fetch_chewing:
+        print("Downloading libchewing-data (word.csv + tsi.csv)...")
+        word_csv = _download_utf8(CHEWING_WORD_CSV_URL)
+        tsi_csv = _download_utf8(CHEWING_TSI_CSV_URL)
+        buckets, assoc_map = build_from_chewing(word_csv, tsi_csv)
     else:
         buckets, assoc_map = build_from_imd(args.from_imd, args.lcptr, args.lcphrase)
 

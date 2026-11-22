@@ -34,7 +34,7 @@ std::u16string Join(const std::vector<std::u16string>& items) {
 
 TEST(T1_1_EncodingAndLookup) {
     const auto& dict = SharedDict();
-    EXPECT_TRUE(dict.IsLoaded());
+    if (!dict.IsLoaded()) { std::cout << "  [SKIP] IMTCPH.IMD not present\n"; return; }
     EXPECT_EQ(dict.MinCid(), 6400u);
     EXPECT_EQ(dict.MaxCid(), 44602u);
 
@@ -65,6 +65,7 @@ TEST(T1_1_EncodingAndLookup) {
 
 TEST(T1_2_CharsetFilterDefault) {
     const auto& dict = SharedDict();
+    if (!dict.IsLoaded()) { std::cout << "  [SKIP] IMTCPH.IMD not present\n"; return; }
     zzhuyin::CharsetFilterConfig def{}; // Ext-A / CNS / HKSCS all false
 
     // ㄉ(5) ㄜ(3) ˙(5) -> 0x2874
@@ -80,6 +81,7 @@ TEST(T1_2_CharsetFilterDefault) {
 
 TEST(T1_3_CharsetFilterExtA) {
     const auto& dict = SharedDict();
+    if (!dict.IsLoaded()) { std::cout << "  [SKIP] IMTCPH.IMD not present\n"; return; }
     zzhuyin::CharsetFilterConfig ext_a{};
     ext_a.include_ext_a = true;
 
@@ -92,7 +94,7 @@ TEST(T1_3_CharsetFilterExtA) {
 
 TEST(T1_4_AssociatePhraseLookup) {
     const auto& dict = SharedDict();
-    EXPECT_TRUE(dict.HasAssociateTables());
+    if (!dict.HasAssociateTables()) { std::cout << "  [SKIP] lcptr.tbl not present\n"; return; }
 
     auto assoc_yi = dict.LookupAssociate(u'一');
     EXPECT_TRUE(assoc_yi.size() > 10);

@@ -1,0 +1,147 @@
+name: Build & Release ZZhuyin Installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g. 0.1.1, defaults to CMakeLists.txt version)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-installers:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if (-not $version -and "${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          }
+          if (-not $version) {
+            $cmake = Get-Content CMakeLists.txt -Raw
+            if ($cmake -match 'project\(ZZhuyin\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)') {
+              $version = $Matches[1]
+            } else {
+              $version = "0.1.1"
+            }
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building ZZhuyin version: $version"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build open-source zzhuyin.zdict (libchewing-data)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          python tools/build_zdict.py --fetch-chewing -o dist/zzhuyin.zdict
+
+      - name: Build & Test Release x64
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-release
+          ctest --test-dir build-release --output-on-failure
+
+      - name: Build & Test Release x86
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
+          cmake -B build-release-x86 -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-release-x86
+          ctest --test-dir build-release-x86 --output-on-failure
+
+      - name: Locate or install Inno Setup
+        id: inno
+        shell: pwsh
+        run: |
+          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if (-not $iscc) {
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+            )
+            $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found!"
+          }
+          echo "iscc=$iscc" >> $env:GITHUB_OUTPUT
+
+      - name: Ensure ChineseTraditional.isl exists for Inno Setup
+        shell: pwsh
+        run: |
+          $innoDir = Split-Path "${{ steps.inno.outputs.iscc }}" -Parent
+          $langDir = Join-Path $innoDir "Languages"
+          $islPath = Join-Path $langDir "ChineseTraditional.isl"
+          if (-not (Test-Path $islPath)) {
+            Write-Host "Downloading ChineseTraditional.isl..."
+            New-Item -ItemType Directory -Path $langDir -Force | Out-Null
+            Invoke-WebRequest `
+              -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseTraditional.isl" `
+              -OutFile $islPath
+          }
+
+      - name: Package x64 Installer
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          & "${{ steps.inno.outputs.iscc }}" `
+            "/DArch=x64" `
+            "/DAppVersion=$ver" `
+            "/DBuildDir=..\build-release" `
+            "/DZDictFile=..\dist\zzhuyin.zdict" `
+            "/Odist" `
+            "installer\zzhuyin.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package x86 Installer
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          & "${{ steps.inno.outputs.iscc }}" `
+            "/DArch=x86" `
+            "/DAppVersion=$ver" `
+            "/DBuildDir=..\build-release-x86" `
+            "/DZDictFile=..\dist\zzhuyin.zdict" `
+            "/Odist" `
+            "installer\zzhuyin.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Installer Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZZhuyin-Installers-${{ steps.ver.outputs.version }}
+          path: |
+            dist/ZZhuyin-Setup-*-x64.exe
+            dist/ZZhuyin-Setup-*-x86.exe
+
+      - name: Publish GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ZZhuyin-Setup-*-x64.exe
+            dist/ZZhuyin-Setup-*-x86.exe
+          generate_release_notes: true
