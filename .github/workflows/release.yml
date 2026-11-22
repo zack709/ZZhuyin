@@ -57,18 +57,29 @@ jobs:
       - name: Build & Test Release x64
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-release
-          ctest --test-dir build-release --output-on-failure
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL (
+            echo Visual Studio C++ tools not found!
+            exit /b 1
+          )
+          echo Using Visual Studio at: %VSINSTALL%
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release || exit /b 1
+          cmake --build build-release || exit /b 1
+          ctest --test-dir build-release --output-on-failure || exit /b 1
 
       - name: Build & Test Release x86
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
-          cmake -B build-release-x86 -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-release-x86
-          ctest --test-dir build-release-x86 --output-on-failure
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL (
+            echo Visual Studio C++ tools not found!
+            exit /b 1
+          )
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars32.bat" || exit /b 1
+          cmake -B build-release-x86 -G Ninja -DCMAKE_BUILD_TYPE=Release || exit /b 1
+          cmake --build build-release-x86 || exit /b 1
+          ctest --test-dir build-release-x86 --output-on-failure || exit /b 1
 
       - name: Locate or install Inno Setup
         id: inno
