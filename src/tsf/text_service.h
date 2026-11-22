@@ -78,6 +78,10 @@ private:
     void InitOpenCloseCompartment();
     void UninitOpenCloseCompartment();
     void SyncOpenCloseCompartment();
+    void AttachContextDisabledSink(ITfContext* context);
+    void DetachContextDisabledSink();
+    bool IsPasswordContext(ITfContext* context) const;
+    void UpdatePasswordMode(ITfContext* context);
     void InitLangBar();
     void UninitLangBar();
     void ApplyPersistedConfig(const PersistedConfig& cfg);
@@ -103,6 +107,11 @@ private:
     ITfCompartment* open_close_comp_ = nullptr;
     DWORD open_close_sink_cookie_ = TF_INVALID_COOKIE;
     bool updating_compartment_ = false;
+
+    ITfCompartment* ctx_disabled_comp_ = nullptr;
+    DWORD ctx_disabled_sink_cookie_ = TF_INVALID_COOKIE;
+    bool in_password_context_ = false;
+    bool restore_native_after_password_ = false;
 
     ITfComposition* composition_ = nullptr;
     ITfContext* active_context_ = nullptr;

@@ -4,6 +4,14 @@
 
 ---
 
+## [0.1.2] - 2026-11-22
+
+### 新增與改進
+- **密碼欄位自動切換英文模式**：偵測 TSF 停用／空上下文（`GUID_COMPARTMENT_KEYBOARD_DISABLED` / `GUID_COMPARTMENT_EMPTYCONTEXT`）、`InputScope`（`IS_PASSWORD` / `IS_NUMERIC_PASSWORD` / `IS_ALPHANUMERIC_PIN` / `IS_NUMERIC_PIN`）以及 Win32 `Edit` / `RichEdit` 密碼控制項（`ES_PASSWORD` / `EM_GETPASSWORDCHAR`）；進入密碼欄位時自動切換為英文模式並放行按鍵，離開密碼欄位後自動恢復原本的輸入模式。
+- **更新安裝程式發行者名稱**：將 Inno Setup 安裝程式 `AppPublisher` 更新為 `Buglife Corporation`。
+
+---
+
 ## [0.1.1] - 2026-11-22
 
 ### 新增功能

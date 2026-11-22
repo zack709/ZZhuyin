@@ -7,7 +7,9 @@
 #include "tsf/guids.h"
 #include "tsf/settings_dlg.h"
 
+#include <inputscope.h>
 #include <oleauto.h>
+#include <cwchar>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -83,6 +85,101 @@ zzhuyin::EngineOutput ApplyOutputScript(
         }
     }
     return out;
+}
+
+bool IsCompartmentTrue(IUnknown* obj, REFGUID guid) {
+    if (!obj) return false;
+    ITfCompartmentMgr* comp_mgr = nullptr;
+    if (FAILED(obj->QueryInterface(
+            IID_ITfCompartmentMgr, reinterpret_cast<void**>(&comp_mgr))) || !comp_mgr) {
+        return false;
+    }
+    bool result = false;
+    ITfCompartment* comp = nullptr;
+    if (SUCCEEDED(comp_mgr->GetCompartment(guid, &comp)) && comp) {
+        VARIANT var{};
+        VariantInit(&var);
+        if (SUCCEEDED(comp->GetValue(&var)) && var.vt == VT_I4 && var.lVal != 0) {
+            result = true;
+        }
+        VariantClear(&var);
+        comp->Release();
+    }
+    comp_mgr->Release();
+    return result;
+}
+
+bool IsPasswordInputScope(InputScope scope) {
+    switch (scope) {
+    case IS_PASSWORD:
+    case IS_NUMERIC_PASSWORD:
+    case IS_ALPHANUMERIC_PIN:
+    case IS_NUMERIC_PIN:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool IsContextInputScopePassword(ITfContext* context, TfClientId client_id) {
+    if (!context || client_id == TF_CLIENTID_NULL) return false;
+    bool is_password = false;
+    auto* session = new (std::nothrow) CallbackEditSession(
+        [context, &is_password](TfEditCookie ec) -> HRESULT {
+            TF_SELECTION sel{};
+            ULONG fetched = 0;
+            if (FAILED(context->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &sel, &fetched)) ||
+                fetched == 0 || !sel.range) {
+                return S_OK;
+            }
+            ITfReadOnlyProperty* prop = nullptr;
+            if (SUCCEEDED(context->GetAppProperty(kGuidPropInputScope, &prop)) && prop) {
+                VARIANT var{};
+                VariantInit(&var);
+                if (SUCCEEDED(prop->GetValue(ec, sel.range, &var)) &&
+                    var.vt == VT_UNKNOWN && var.punkVal) {
+                    ITfInputScope* input_scope = nullptr;
+                    if (SUCCEEDED(var.punkVal->QueryInterface(
+                            IID_ITfInputScope, reinterpret_cast<void**>(&input_scope))) &&
+                        input_scope) {
+                        InputScope* scopes = nullptr;
+                        UINT count = 0;
+                        if (SUCCEEDED(input_scope->GetInputScopes(&scopes, &count)) && scopes) {
+                            for (UINT i = 0; i < count; ++i) {
+                                if (IsPasswordInputScope(scopes[i])) {
+                                    is_password = true;
+                                    break;
+                                }
+                            }
+                            CoTaskMemFree(scopes);
+                        }
+                        input_scope->Release();
+                    }
+                }
+                VariantClear(&var);
+                prop->Release();
+            }
+            sel.range->Release();
+            return S_OK;
+        });
+    if (!session) return false;
+    HRESULT hr_session = E_FAIL;
+    context->RequestEditSession(client_id, session, TF_ES_SYNC | TF_ES_READ, &hr_session);
+    session->Release();
+    return is_password;
+}
+
+bool IsPasswordEditHwnd(HWND hwnd) {
+    if (!hwnd || !IsWindow(hwnd)) return false;
+    wchar_t cls[64] = {};
+    if (GetClassNameW(hwnd, cls, 64) <= 0) return false;
+    const bool is_edit =
+        (_wcsicmp(cls, L"Edit") == 0) ||
+        (_wcsnicmp(cls, L"RichEdit", 8) == 0);
+    if (!is_edit) return false;
+    const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    if ((style & ES_PASSWORD) != 0) return true;
+    return SendMessageW(hwnd, EM_GETPASSWORDCHAR, 0, 0) != 0;
 }
 
 } // namespace
@@ -193,6 +290,10 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD /
 }
 
 STDMETHODIMP TextService::Deactivate() {
+    DetachContextDisabledSink();
+    in_password_context_ = false;
+    restore_native_after_password_ = false;
+
     if (active_context_) {
         TerminateComposition(active_context_);
         active_context_->Release();
@@ -416,6 +517,11 @@ void TextService::SyncOpenCloseCompartment() {
 }
 
 STDMETHODIMP TextService::OnChange(REFGUID rguid) {
+    if (IsEqualGUID(rguid, GUID_COMPARTMENT_KEYBOARD_DISABLED) ||
+        IsEqualGUID(rguid, GUID_COMPARTMENT_EMPTYCONTEXT)) {
+        UpdatePasswordMode(active_context_);
+        return S_OK;
+    }
     if (updating_compartment_ || !open_close_comp_ || !engine_) {
         return S_OK;
     }
@@ -423,6 +529,10 @@ STDMETHODIMP TextService::OnChange(REFGUID rguid) {
         VARIANT var{};
         if (SUCCEEDED(open_close_comp_->GetValue(&var)) && var.vt == VT_I4) {
             const bool is_native = (var.lVal != 0);
+            if (in_password_context_ && is_native) {
+                SyncOpenCloseCompartment();
+                return S_OK;
+            }
             if (engine_->IsNativeMode() != is_native) {
                 engine_->SetNativeMode(is_native);
                 candidate_wnd_.Hide();
@@ -436,6 +546,113 @@ STDMETHODIMP TextService::OnChange(REFGUID rguid) {
         }
     }
     return S_OK;
+}
+
+void TextService::AttachContextDisabledSink(ITfContext* context) {
+    DetachContextDisabledSink();
+    if (!context) return;
+
+    ITfCompartmentMgr* comp_mgr = nullptr;
+    if (FAILED(context->QueryInterface(
+            IID_ITfCompartmentMgr, reinterpret_cast<void**>(&comp_mgr))) || !comp_mgr) {
+        return;
+    }
+    if (SUCCEEDED(comp_mgr->GetCompartment(
+            GUID_COMPARTMENT_KEYBOARD_DISABLED, &ctx_disabled_comp_)) && ctx_disabled_comp_) {
+        ITfSource* source = nullptr;
+        if (SUCCEEDED(ctx_disabled_comp_->QueryInterface(
+                IID_ITfSource, reinterpret_cast<void**>(&source))) && source) {
+            source->AdviseSink(
+                IID_ITfCompartmentEventSink,
+                static_cast<ITfCompartmentEventSink*>(this),
+                &ctx_disabled_sink_cookie_);
+            source->Release();
+        }
+    }
+    comp_mgr->Release();
+}
+
+void TextService::DetachContextDisabledSink() {
+    if (!ctx_disabled_comp_) return;
+    if (ctx_disabled_sink_cookie_ != TF_INVALID_COOKIE) {
+        ITfSource* source = nullptr;
+        if (SUCCEEDED(ctx_disabled_comp_->QueryInterface(
+                IID_ITfSource, reinterpret_cast<void**>(&source))) && source) {
+            source->UnadviseSink(ctx_disabled_sink_cookie_);
+            source->Release();
+        }
+        ctx_disabled_sink_cookie_ = TF_INVALID_COOKIE;
+    }
+    ctx_disabled_comp_->Release();
+    ctx_disabled_comp_ = nullptr;
+}
+
+bool TextService::IsPasswordContext(ITfContext* context) const {
+    if (!context) return false;
+
+    if (IsCompartmentTrue(context, GUID_COMPARTMENT_KEYBOARD_DISABLED) ||
+        IsCompartmentTrue(context, GUID_COMPARTMENT_EMPTYCONTEXT)) {
+        return true;
+    }
+
+    ITfDocumentMgr* doc_mgr = nullptr;
+    if (SUCCEEDED(context->GetDocumentMgr(&doc_mgr)) && doc_mgr) {
+        const bool doc_disabled =
+            IsCompartmentTrue(doc_mgr, GUID_COMPARTMENT_KEYBOARD_DISABLED) ||
+            IsCompartmentTrue(doc_mgr, GUID_COMPARTMENT_EMPTYCONTEXT);
+        doc_mgr->Release();
+        if (doc_disabled) return true;
+    }
+
+    if (IsContextInputScopePassword(context, client_id_)) {
+        return true;
+    }
+
+    HWND hwnd = nullptr;
+    ITfContextView* view = nullptr;
+    if (SUCCEEDED(context->GetActiveView(&view)) && view) {
+        view->GetWnd(&hwnd);
+        view->Release();
+    }
+    if (!hwnd) {
+        hwnd = GetFocus();
+    }
+    return IsPasswordEditHwnd(hwnd);
+}
+
+void TextService::UpdatePasswordMode(ITfContext* context) {
+    if (!engine_) return;
+    const bool is_password = IsPasswordContext(context);
+    if (is_password) {
+        if (!in_password_context_) {
+            in_password_context_ = true;
+            restore_native_after_password_ = engine_->IsNativeMode();
+        }
+        if (engine_->IsNativeMode()) {
+            engine_->SetNativeMode(false);
+            candidate_wnd_.Hide();
+            symbol_wnd_.Hide();
+            if (context) {
+                TerminateComposition(context);
+            }
+            SyncOpenCloseCompartment();
+            if (lang_bar_btn_) {
+                lang_bar_btn_->NotifyUpdate();
+            }
+        }
+    } else if (in_password_context_) {
+        in_password_context_ = false;
+        if (restore_native_after_password_) {
+            restore_native_after_password_ = false;
+            if (!engine_->IsNativeMode()) {
+                engine_->SetNativeMode(true);
+                SyncOpenCloseCompartment();
+                if (lang_bar_btn_) {
+                    lang_bar_btn_->NotifyUpdate();
+                }
+            }
+        }
+    }
 }
 
 void TextService::InitLangBar() {
@@ -521,6 +738,7 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* pdimFocus, ITfDocumentMgr* 
     candidate_wnd_.Hide();
     symbol_wnd_.Hide();
 
+    DetachContextDisabledSink();
     if (active_context_) {
         active_context_->Release();
         active_context_ = nullptr;
@@ -528,6 +746,8 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* pdimFocus, ITfDocumentMgr* 
     if (pdimFocus) {
         pdimFocus->GetTop(&active_context_);
     }
+    AttachContextDisabledSink(active_context_);
+    UpdatePasswordMode(active_context_);
     return S_OK;
 }
 
@@ -588,9 +808,14 @@ zzhuyin::KeyEvent TextService::TranslateKeyEvent(
 }
 
 STDMETHODIMP TextService::OnTestKeyDown(
-    ITfContext* /*pic*/, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
+    ITfContext* pic, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
     if (!engine_) {
+        *pfEaten = FALSE;
+        return S_OK;
+    }
+    UpdatePasswordMode(pic ? pic : active_context_);
+    if (in_password_context_) {
         *pfEaten = FALSE;
         return S_OK;
     }
@@ -606,6 +831,11 @@ STDMETHODIMP TextService::OnKeyDown(
         *pfEaten = FALSE;
         return S_OK;
     }
+    UpdatePasswordMode(pic ? pic : active_context_);
+    if (in_password_context_) {
+        *pfEaten = FALSE;
+        return S_OK;
+    }
     const auto ev = TranslateKeyEvent(wParam, lParam, /*is_key_up=*/false);
     const auto out = engine_->ProcessKey(ev);
     *pfEaten = out.handled ? TRUE : FALSE;
@@ -616,7 +846,7 @@ STDMETHODIMP TextService::OnKeyDown(
 STDMETHODIMP TextService::OnTestKeyUp(
     ITfContext* /*pic*/, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
-    if (!engine_) {
+    if (!engine_ || in_password_context_) {
         *pfEaten = FALSE;
         return S_OK;
     }
@@ -628,7 +858,7 @@ STDMETHODIMP TextService::OnTestKeyUp(
 STDMETHODIMP TextService::OnKeyUp(
     ITfContext* pic, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
-    if (!engine_) {
+    if (!engine_ || in_password_context_) {
         *pfEaten = FALSE;
         return S_OK;
     }
@@ -643,6 +873,11 @@ STDMETHODIMP TextService::OnPreservedKey(
     ITfContext* pic, REFGUID rguid, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
     *pfEaten = FALSE;
+
+    UpdatePasswordMode(pic ? pic : active_context_);
+    if (in_password_context_) {
+        return S_OK;
+    }
 
     if (IsEqualGUID(rguid, kGuidPreservedKeyToggleNative) && engine_) {
         engine_->SetNativeMode(!engine_->IsNativeMode());

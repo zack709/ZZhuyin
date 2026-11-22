@@ -40,6 +40,12 @@ inline constexpr GUID kGuidLbiInputMode = {
     0x2c77a81e, 0x41cc, 0x4178, {0xa3, 0xa7, 0x5f, 0x8a, 0x98, 0x75, 0x68, 0xe6}
 };
 
+// Standard TSF InputScope property GUID (GUID_PROP_INPUTSCOPE)
+// {1713DD5A-68E7-4A5B-9AF6-592A595C778D}
+inline constexpr GUID kGuidPropInputScope = {
+    0x1713dd5a, 0x68e7, 0x4a5b, {0x9a, 0xf6, 0x59, 0x2a, 0x59, 0x5c, 0x77, 0x8d}
+};
+
 inline constexpr LANGID kLangIdZhTw = MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL); // 0x0404
 inline constexpr wchar_t kProfileDescription[] = L"Z注音";
 inline constexpr wchar_t kClsidDescription[]   = L"Z注音";
