@@ -79,7 +79,7 @@ Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\zzhuyin_tsf.dll"""; Stat
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$t='{#TipId}'; $l=Get-WinUserLanguageList; $z=$l | Where-Object {{$_.LanguageTag -like 'zh*'}} | Select-Object -First 1; if ($z -and -not ($z.InputMethodTips -contains $t)) {{ $z.InputMethodTips.Add($t); Set-WinUserLanguageList $l -Force -WarningAction SilentlyContinue }}"""; StatusMsg: "正在將 Z注音 加入系統鍵盤清單..."; Flags: runhidden waituntilterminated runasoriginaluser
 
 [UninstallRun]
-; Remove ZZhuyin TIP from the logged-in user's keyboard list
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$t='{#TipId}'; $l=Get-WinUserLanguageList; $z=$l | Where-Object {{$_.LanguageTag -like 'zh*'}} | Select-Object -First 1; if ($z -and ($z.InputMethodTips -contains $t)) {{ [void]$z.InputMethodTips.Remove($t); Set-WinUserLanguageList $l -Force -WarningAction SilentlyContinue }}"""; RunOnceId: "RemoveZZhuyinTip"; Flags: runhidden waituntilterminated runasoriginaluser
+; Remove ZZhuyin TIP from the user's keyboard list
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$t='{#TipId}'; $l=Get-WinUserLanguageList; $z=$l | Where-Object {{$_.LanguageTag -like 'zh*'}} | Select-Object -First 1; if ($z -and ($z.InputMethodTips -contains $t)) {{ [void]$z.InputMethodTips.Remove($t); Set-WinUserLanguageList $l -Force -WarningAction SilentlyContinue }}"""; RunOnceId: "RemoveZZhuyinTip"; Flags: runhidden waituntilterminated
 ; Unregister TSF COM server
 Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\zzhuyin_tsf.dll"""; RunOnceId: "UnregZZhuyinDll"; Flags: runhidden waituntilterminated
