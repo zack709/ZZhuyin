@@ -32,9 +32,6 @@
 ```text
 ZZhuyin/
 ├── CMakeLists.txt              # CMake 建置設定（Core、Tests、TSF DLL）
-├── docs/                       # 逆向分析文件與完整實作規格書
-│   ├── zzhuyin-spec.md         # ZZhuyin 核心規格與 TSF 實作藍圖
-│   └── phase-1..4-*.md         # 各階段逆向報告
 ├── src/
 │   ├── core/                   # zzhuyin_core（純標準 C++20，零 Windows 相依）
 │   │   ├── types.h             # 16-bit 注音編碼、事件與設定結構
@@ -123,14 +120,6 @@ python tools/build_zdict.py `
 ```
 
 安裝完成後即可透過 `Win + Space` 切換至 **「Z注音」**。若要覆蓋更新正在被系統載入的 DLL，再次執行 `install.ps1` 即會自動熱替換（新開啟的應用程式會立即載入新版）。
-
----
-
-## 規格與逆向文件
-
-完整的狀態機規則、16-bit 注音編碼與二進位格式說明請參閱：
-- [規格書與實作藍圖（zzhuyin-spec.md）](docs/zzhuyin-spec.md)
-- [執行計畫（plan.md）](plan.md)
 
 ---
 
