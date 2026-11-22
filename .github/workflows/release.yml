@@ -102,20 +102,6 @@ jobs:
           }
           echo "iscc=$iscc" >> $env:GITHUB_OUTPUT
 
-      - name: Ensure ChineseTraditional.isl exists for Inno Setup
-        shell: pwsh
-        run: |
-          $innoDir = Split-Path "${{ steps.inno.outputs.iscc }}" -Parent
-          $langDir = Join-Path $innoDir "Languages"
-          $islPath = Join-Path $langDir "ChineseTraditional.isl"
-          if (-not (Test-Path $islPath)) {
-            Write-Host "Downloading ChineseTraditional.isl..."
-            New-Item -ItemType Directory -Path $langDir -Force | Out-Null
-            Invoke-WebRequest `
-              -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseTraditional.isl" `
-              -OutFile $islPath
-          }
-
       - name: Package x64 Installer
         shell: pwsh
         run: |

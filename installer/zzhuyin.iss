@@ -63,7 +63,7 @@ UninstallDisplayName={#AppName} ({#Arch})
 CloseApplications=no
 
 [Languages]
-Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
+Name: "default"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#BuildDir}\zzhuyin_tsf.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
