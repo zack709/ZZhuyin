@@ -42,12 +42,23 @@ void ZhuyinEngine::SetConfig(EngineConfig cfg) {
 void ZhuyinEngine::SetNativeMode(bool native) {
     if (native_mode_ != native) {
         native_mode_ = native;
+        if (!native_mode_) {
+            symbol_keyboard_active_ = false;
+        }
         Reset();
     }
 }
 
 void ZhuyinEngine::SetFullShapeMode(bool full_shape) {
     full_shape_ = full_shape;
+}
+
+void ZhuyinEngine::SetSymbolKeyboardActive(bool active) {
+    symbol_keyboard_active_ = active;
+    if (active) {
+        composer_.Clear();
+        candidates_.Close();
+    }
 }
 
 EngineState ZhuyinEngine::State() const {
@@ -84,6 +95,7 @@ void ZhuyinEngine::PopulateViewState(EngineOutput& out) const {
         out.composition.clear();
     }
     out.candidates = candidates_.View();
+    out.symbol_keyboard_active = symbol_keyboard_active_;
 }
 
 bool ZhuyinEngine::HandleShiftShortPress(const KeyEvent& ev, EngineOutput& out) {
@@ -121,6 +133,9 @@ bool ZhuyinEngine::HandleShiftShortPress(const KeyEvent& ev, EngineOutput& out) 
 
         if (should_toggle) {
             native_mode_ = !native_mode_;
+            if (!native_mode_) {
+                symbol_keyboard_active_ = false;
+            }
             composer_.Clear();
             candidates_.Close();
             out.handled = true;
@@ -385,6 +400,9 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
             }
         }
         native_mode_ = !native_mode_;
+        if (!native_mode_) {
+            symbol_keyboard_active_ = false;
+        }
         composer_.Clear();
         candidates_.Close();
         out.handled = true;
@@ -406,7 +424,44 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
         return out;
     }
 
-    // Priority 1b: Built-in punctuation shortcuts (Ctrl+, / Ctrl+Alt+...)
+    // Priority 1b: Ctrl + Alt + , toggles the 47-key full-width symbol keyboard
+    if (ev.vk_code == vk::kOemComma &&
+        ctrl_alt_shift == static_cast<uint16_t>(mod::kControl | mod::kAlt)) {
+        if (candidates_.IsActive() && !candidates_.IsAssociate()) {
+            if (auto sel = candidates_.SelectCurrent()) {
+                out.commit_text += *sel;
+            }
+        }
+        composer_.Clear();
+        candidates_.Close();
+        symbol_keyboard_active_ = !symbol_keyboard_active_;
+        out.handled = true;
+        PopulateViewState(out);
+        return out;
+    }
+
+    // Priority 1c: Symbol soft keyboard active (Phase 3 Handler #2)
+    if (symbol_keyboard_active_) {
+        const bool has_ctrl_alt = (ev.modifiers & (mod::kControl | mod::kAlt)) != 0;
+        if (!has_ctrl_alt) {
+            if (ev.vk_code == vk::kEscape) {
+                symbol_keyboard_active_ = false;
+                out.handled = true;
+                PopulateViewState(out);
+                return out;
+            }
+            if (auto sym = KeyMapper::MapSymbolKeyboard(ev.vk_code)) {
+                out.commit_text.push_back(*sym);
+                out.handled = true;
+                PopulateViewState(out);
+                return out;
+            }
+        }
+        PopulateViewState(out);
+        return out;
+    }
+
+    // Priority 1d: Built-in punctuation shortcuts (Ctrl+, / Ctrl+Alt+...)
     if (cfg_.enable_punctuation_input) {
         if (auto punc = KeyMapper::MapPunctuationShortcut(ev.vk_code, ev.modifiers)) {
             if (candidates_.IsActive() && !candidates_.IsAssociate()) {

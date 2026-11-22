@@ -131,6 +131,7 @@ struct EngineOutput {
     bool handled       = false;
     bool beep          = false;
     bool mode_changed  = false;
+    bool symbol_keyboard_active = false;
     std::u16string commit_text;
     std::u16string composition;
     CandidateView candidates;

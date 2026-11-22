@@ -24,8 +24,10 @@ public:
 
     void SetNativeMode(bool native);
     void SetFullShapeMode(bool full_shape);
+    void SetSymbolKeyboardActive(bool active);
     bool IsNativeMode() const { return native_mode_; }
     bool IsFullShapeMode() const { return full_shape_; }
+    bool IsSymbolKeyboardActive() const { return symbol_keyboard_active_; }
 
     EngineState State() const;
     void Reset();
@@ -43,6 +45,7 @@ private:
 
     bool native_mode_ = true;
     bool full_shape_ = false;
+    bool symbol_keyboard_active_ = false;
 
     BopomofoComposer composer_;
     CandidateManager candidates_;

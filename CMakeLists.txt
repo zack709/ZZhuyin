@@ -30,6 +30,7 @@ if(WIN32)
         src/tsf/text_service.cpp
         src/tsf/display_attr.cpp
         src/tsf/candidate_wnd.cpp
+        src/tsf/symbol_wnd.cpp
         src/tsf/lang_bar.cpp
         src/tsf/config_reg.cpp
         src/tsf/settings_dlg.cpp

@@ -155,4 +155,65 @@ std::optional<char16_t> KeyMapper::ToFullShapeAscii(char16_t unicode_char) {
     return std::nullopt;
 }
 
+std::optional<char16_t> KeyMapper::MapSymbolKeyboard(uint16_t vk_code) {
+    switch (vk_code) {
+        // Row 0 (14 keys)
+        case vk::kOem3:      return u'\u20AC'; // ` -> €
+        case '1':            return u'\u250C'; // 1 -> ┌
+        case '2':            return u'\u252C'; // 2 -> ┬
+        case '3':            return u'\u2510'; // 3 -> ┐
+        case '4':            return u'\u301D'; // 4 -> 〝
+        case '5':            return u'\u301E'; // 5 -> 〞
+        case '6':            return u'\u2018'; // 6 -> ‘
+        case '7':            return u'\u2019'; // 7 -> ’
+        case '8':            return u'\u201C'; // 8 -> “
+        case '9':            return u'\u201D'; // 9 -> ”
+        case '0':            return u'\u300E'; // 0 -> 『
+        case vk::kOemMinus:  return u'\u300F'; // - -> 』
+        case vk::kOemPlus:   return u'\u300C'; // = -> 「
+        case vk::kOem5:      return u'\u300D'; // \ -> 」
+
+        // Row 1 (12 keys)
+        case 'Q':            return u'\u251C'; // Q -> ├
+        case 'W':            return u'\u253C'; // W -> ┼
+        case 'E':            return u'\u2524'; // E -> ┤
+        case 'R':            return u'\u203B'; // R -> ※
+        case 'T':            return u'\uFF08'; // T -> （
+        case 'Y':            return u'\uFF09'; // Y -> ）
+        case 'U':            return u'\u300A'; // U -> 《
+        case 'I':            return u'\u300B'; // I -> 》
+        case 'O':            return u'\u3010'; // O -> 【
+        case 'P':            return u'\u3011'; // P -> 】
+        case vk::kOem4:      return u'\u3014'; // [ -> 〔
+        case vk::kOem6:      return u'\u3015'; // ] -> 〕
+
+        // Row 2 (11 keys)
+        case 'A':            return u'\u2514'; // A -> └
+        case 'S':            return u'\u2534'; // S -> ┴
+        case 'D':            return u'\u2518'; // D -> ┘
+        case 'F':            return u'\u25CB'; // F -> ○
+        case 'G':            return u'\u25CF'; // G -> ●
+        case 'H':            return u'\u2191'; // H -> ↑
+        case 'J':            return u'\u2193'; // J -> ↓
+        case 'K':            return u'\uFF01'; // K -> ！
+        case 'L':            return u'\uFF1A'; // L -> ：
+        case vk::kOem1:      return u'\uFF1B'; // ; -> ；
+        case vk::kOem7:      return u'\u3001'; // ' -> 、
+
+        // Row 3 (10 keys)
+        case 'Z':            return u'\u2500'; // Z -> ─
+        case 'X':            return u'\u2502'; // X -> │
+        case 'C':            return u'\u25CE'; // C -> ◎
+        case 'V':            return u'\u00A7'; // V -> §
+        case 'B':            return u'\u2190'; // B -> ←
+        case 'N':            return u'\u2192'; // N -> →
+        case 'M':            return u'\u3002'; // M -> 。
+        case vk::kOemComma:  return u'\uFF0C'; // , -> ，
+        case vk::kOemPeriod: return u'\u2027'; // . -> ‧
+        case vk::kOem2:      return u'\uFF1F'; // / -> ？
+
+        default:             return std::nullopt;
+    }
+}
+
 } // namespace zzhuyin

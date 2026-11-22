@@ -356,3 +356,43 @@ TEST(DefaultSelectFirstCandidateWhenContinuingTyping) {
     EXPECT_EQ(o_punc.commit_text, u"因，");
     EXPECT_EQ(engine.State(), zzhuyin::EngineState::Idle);
 }
+
+TEST(SymbolKeyboardCtrlAltComma) {
+    zzhuyin::ZhuyinEngine engine(TestDict());
+    EXPECT_FALSE(engine.IsSymbolKeyboardActive());
+
+    // Open symbol keyboard with Ctrl + Alt + ,
+    const uint16_t ctrl_alt = static_cast<uint16_t>(zzhuyin::mod::kControl | zzhuyin::mod::kAlt);
+    auto o_open = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemComma, ctrl_alt));
+    EXPECT_TRUE(o_open.handled);
+    EXPECT_TRUE(o_open.symbol_keyboard_active);
+    EXPECT_TRUE(engine.IsSymbolKeyboardActive());
+
+    // Press '=' -> 「, '\' -> 」, ',' -> ，, '/' -> ？
+    auto o1 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemPlus));
+    EXPECT_TRUE(o1.handled);
+    EXPECT_EQ(o1.commit_text, u"「");
+
+    auto o2 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOem5));
+    EXPECT_TRUE(o2.handled);
+    EXPECT_EQ(o2.commit_text, u"」");
+
+    auto o3 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOemComma));
+    EXPECT_TRUE(o3.handled);
+    EXPECT_EQ(o3.commit_text, u"，");
+
+    auto o4 = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kOem2));
+    EXPECT_TRUE(o4.handled);
+    EXPECT_EQ(o4.commit_text, u"？");
+
+    // Esc closes symbol keyboard
+    auto o_esc = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kEscape));
+    EXPECT_TRUE(o_esc.handled);
+    EXPECT_FALSE(o_esc.symbol_keyboard_active);
+    EXPECT_FALSE(engine.IsSymbolKeyboardActive());
+
+    // Normal Bopomofo resumes
+    auto o_bo = engine.ProcessKey(MakeCharKey('1'));
+    EXPECT_TRUE(o_bo.handled);
+    EXPECT_EQ(o_bo.composition, u"ㄅ");
+}

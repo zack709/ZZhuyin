@@ -28,6 +28,9 @@ public:
 
     // Converts printable ASCII (0x20..0x7E) to full-width equivalent.
     static std::optional<char16_t> ToFullShapeAscii(char16_t unicode_char);
+
+    // Maps VK code on the 47-key Win7 symbol soft keyboard (Ctrl+Alt+,) to full-width Unicode symbol.
+    static std::optional<char16_t> MapSymbolKeyboard(uint16_t vk_code);
 };
 
 } // namespace zzhuyin

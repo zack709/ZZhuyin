@@ -177,6 +177,15 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD /
         OnCandidateMouseSelect(page_offset);
     });
 
+    symbol_wnd_.Create(g_hInst);
+    symbol_wnd_.SetDarkTheme(config_.ui.dark_theme);
+    symbol_wnd_.SetSymbolCallback([this](char16_t sym) {
+        OnSymbolMouseSelect(sym);
+    });
+    symbol_wnd_.SetCloseCallback([this]() {
+        OnSymbolKeyboardClose();
+    });
+
     InitOpenCloseCompartment();
     InitLangBar();
 
@@ -192,6 +201,7 @@ STDMETHODIMP TextService::Deactivate() {
 
     UninitLangBar();
     UninitOpenCloseCompartment();
+    symbol_wnd_.Destroy();
     candidate_wnd_.Destroy();
     UninitKeyEventSink();
     UninitThreadMgrEventSink();
@@ -321,6 +331,14 @@ bool TextService::InitKeyEventSink() {
         ks_mgr->PreserveKey(
             client_id_, kGuidPreservedKeyToggleNative, &pk,
             kDesc, static_cast<ULONG>(wcslen(kDesc)));
+
+        TF_PRESERVEDKEY pk_sym{};
+        pk_sym.uVKey = VK_OEM_COMMA;
+        pk_sym.uModifiers = TF_MOD_CONTROL | TF_MOD_ALT;
+        constexpr wchar_t kSymDesc[] = L"Toggle Symbol Keyboard";
+        ks_mgr->PreserveKey(
+            client_id_, kGuidPreservedKeySymbolKeyboard, &pk_sym,
+            kSymDesc, static_cast<ULONG>(wcslen(kSymDesc)));
     }
     ks_mgr->Release();
     return SUCCEEDED(hr);
@@ -334,6 +352,12 @@ void TextService::UninitKeyEventSink() {
             pk.uVKey = VK_SPACE;
             pk.uModifiers = TF_MOD_CONTROL;
             ks_mgr->UnpreserveKey(kGuidPreservedKeyToggleNative, &pk);
+
+            TF_PRESERVEDKEY pk_sym{};
+            pk_sym.uVKey = VK_OEM_COMMA;
+            pk_sym.uModifiers = TF_MOD_CONTROL | TF_MOD_ALT;
+            ks_mgr->UnpreserveKey(kGuidPreservedKeySymbolKeyboard, &pk_sym);
+
             ks_mgr->UnadviseKeyEventSink(client_id_);
             ks_mgr->Release();
         }
@@ -479,6 +503,7 @@ void TextService::ApplyPersistedConfig(const PersistedConfig& cfg) {
     candidate_wnd_.SetOrientation(cfg.engine.orientation);
     candidate_wnd_.SetFontSizePt(cfg.ui.font_size_pt);
     candidate_wnd_.SetDarkTheme(cfg.ui.dark_theme);
+    symbol_wnd_.SetDarkTheme(cfg.ui.dark_theme);
 }
 
 // ITfThreadMgrEventSink
@@ -490,9 +515,11 @@ STDMETHODIMP TextService::OnPopContext(ITfContext* /*pic*/) { return S_OK; }
 STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* pdimFocus, ITfDocumentMgr* /*pdimPrevFocus*/) {
     if (engine_) {
         engine_->Reset();
+        engine_->SetSymbolKeyboardActive(false);
         ApplyPersistedConfig(ConfigStore::Load());
     }
     candidate_wnd_.Hide();
+    symbol_wnd_.Hide();
 
     if (active_context_) {
         active_context_->Release();
@@ -509,8 +536,10 @@ STDMETHODIMP TextService::OnSetFocus(BOOL fForeground) {
     if (!fForeground) {
         if (engine_) {
             engine_->Reset();
+            engine_->SetSymbolKeyboardActive(false);
         }
         candidate_wnd_.Hide();
+        symbol_wnd_.Hide();
     }
     return S_OK;
 }
@@ -618,6 +647,7 @@ STDMETHODIMP TextService::OnPreservedKey(
     if (IsEqualGUID(rguid, kGuidPreservedKeyToggleNative) && engine_) {
         engine_->SetNativeMode(!engine_->IsNativeMode());
         candidate_wnd_.Hide();
+        symbol_wnd_.Hide();
         if (pic) {
             TerminateComposition(pic);
         }
@@ -625,6 +655,18 @@ STDMETHODIMP TextService::OnPreservedKey(
         if (lang_bar_btn_) {
             lang_bar_btn_->NotifyUpdate();
         }
+        *pfEaten = TRUE;
+    } else if (IsEqualGUID(rguid, kGuidPreservedKeySymbolKeyboard) && engine_) {
+        if (!engine_->IsNativeMode()) {
+            engine_->SetNativeMode(true);
+            SyncOpenCloseCompartment();
+            if (lang_bar_btn_) lang_bar_btn_->NotifyUpdate();
+        }
+        zzhuyin::KeyEvent ev{};
+        ev.vk_code = zzhuyin::vk::kOemComma;
+        ev.modifiers = static_cast<uint16_t>(zzhuyin::mod::kControl | zzhuyin::mod::kAlt);
+        const auto out = engine_->ProcessKey(ev);
+        ApplyOutput(pic ? pic : active_context_, out);
         *pfEaten = TRUE;
     }
     return S_OK;
@@ -638,6 +680,15 @@ void TextService::ApplyOutput(ITfContext* context, const zzhuyin::EngineOutput& 
         SyncOpenCloseCompartment();
         if (lang_bar_btn_) {
             lang_bar_btn_->NotifyUpdate();
+        }
+    }
+    if (out.symbol_keyboard_active) {
+        if (!symbol_wnd_.IsVisible()) {
+            symbol_wnd_.Show();
+        }
+    } else {
+        if (symbol_wnd_.IsVisible()) {
+            symbol_wnd_.Hide();
         }
     }
 
@@ -864,6 +915,23 @@ void TextService::OnCandidateMouseSelect(size_t page_offset) {
 
     const auto out = engine_->ProcessKey(ev);
     ApplyOutput(active_context_, out);
+}
+
+void TextService::OnSymbolMouseSelect(char16_t sym) {
+    if (!engine_ || sym == 0) return;
+
+    zzhuyin::EngineOutput out{};
+    out.handled = true;
+    out.commit_text.assign(1, sym);
+    out.symbol_keyboard_active = engine_->IsSymbolKeyboardActive();
+    ApplyOutput(active_context_, out);
+}
+
+void TextService::OnSymbolKeyboardClose() {
+    if (engine_) {
+        engine_->SetSymbolKeyboardActive(false);
+    }
+    symbol_wnd_.Hide();
 }
 
 // ITfCompositionSink

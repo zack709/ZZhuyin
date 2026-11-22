@@ -5,6 +5,7 @@
 #include "tsf/candidate_wnd.h"
 #include "tsf/config_reg.h"
 #include "tsf/lang_bar.h"
+#include "tsf/symbol_wnd.h"
 
 #include <ctffunc.h>
 #include <msctf.h>
@@ -89,6 +90,8 @@ private:
     void ClearCompositionDisplayAttribute(TfEditCookie ec, ITfContext* context, ITfRange* range);
     void TerminateComposition(ITfContext* context);
     void OnCandidateMouseSelect(size_t page_offset);
+    void OnSymbolMouseSelect(char16_t sym);
+    void OnSymbolKeyboardClose();
 
     std::atomic<long> ref_count_{1};
 
@@ -108,6 +111,7 @@ private:
     PersistedConfig config_{};
     std::unique_ptr<zzhuyin::ZhuyinEngine> engine_;
     CandidateWindow candidate_wnd_;
+    SymbolKeyboardWindow symbol_wnd_;
     LangBarButton* lang_bar_btn_ = nullptr;
 };
 
