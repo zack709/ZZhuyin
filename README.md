@@ -131,3 +131,10 @@ python tools/build_zdict.py `
 完整的狀態機規則、16-bit 注音編碼與二進位格式說明請參閱：
 - [規格書與實作藍圖（zzhuyin-spec.md）](docs/zzhuyin-spec.md)
 - [執行計畫（plan.md）](plan.md)
+
+---
+
+## 授權條款
+
+本專案採用 **Apache License 2.0 + Commons Clause License Condition v1.0** 授權，詳見 [LICENSE](LICENSE)。
+你可以自由使用、修改與散佈本軟體，但不得將本軟體（或其衍生產品／服務）用於商業販售（Sell）。
