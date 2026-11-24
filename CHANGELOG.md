@@ -4,6 +4,18 @@
 
 ---
 
+## [0.1.3] - 2026-11-24
+
+### 新增與改進
+- **新增 ARM64（Windows on ARM）建置與安裝檔打包支援**：
+  - 更新 [installer/zzhuyin.iss](installer/zzhuyin.iss) 新增 `/DArch=arm64` 分支，可獨立產出 `ZZhuyin-Setup-<版本>-arm64.exe`。
+  - 更新 [.github/workflows/release.yml](.github/workflows/release.yml) 新增 `Build Release arm64`（`vcvarsall.bat amd64_arm64` 交叉編譯）與 `Package arm64 Installer`，於 Release 同步發佈 ARM64 安裝檔。
+  - 更新 [scripts/install.ps1](scripts/install.ps1) 在 ARM64 環境下自動偵測 `build-release-arm64`。
+- **相關字詞預設不自動選取第一項**：
+  - 彈出相關字詞（聯想詞）視窗時預設不反白／不預選第 1 個字詞；若未先以 `↑` / `↓` 選取，直接按 `Enter` 或 `Backspace` 會關閉聯想視窗並放行按鍵，不會自動上字第 1 個相關字詞（仍可使用 `Shift + 1`～`9` 或滑鼠直接點選）。
+
+---
+
 ## [0.1.2] - 2026-11-22
 
 ### 新增與改進

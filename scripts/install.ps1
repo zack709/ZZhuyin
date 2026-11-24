@@ -1,12 +1,20 @@
 ﻿#Requires -RunAsAdministrator
 param(
-    [string]$BuildDir = "$PSScriptRoot\..\build-release",
+    [string]$BuildDir = "",
     [string]$BuildDirX86 = "$PSScriptRoot\..\build-release-x86",
     [string]$InstallDir = "$env:ProgramFiles\ZZhuyin",
     [string]$ZDictPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $BuildDir) {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -and (Test-Path "$PSScriptRoot\..\build-release-arm64\zzhuyin_tsf.dll")) {
+        $BuildDir = "$PSScriptRoot\..\build-release-arm64"
+    } else {
+        $BuildDir = "$PSScriptRoot\..\build-release"
+    }
+}
 
 function Install-DllWithHotSwap {
     param(

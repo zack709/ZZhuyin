@@ -820,7 +820,16 @@ STDMETHODIMP TextService::OnTestKeyDown(
         return S_OK;
     }
     const auto ev = TranslateKeyEvent(wParam, lParam, /*is_key_up=*/false);
-    *pfEaten = engine_->WillHandleKey(ev) ? TRUE : FALSE;
+    const bool will_handle = engine_->WillHandleKey(ev);
+    if (!will_handle && engine_->State() != zzhuyin::EngineState::Idle) {
+        zzhuyin::ZhuyinEngine preview = *engine_;
+        preview.ProcessKey(ev);
+        if (preview.State() != engine_->State()) {
+            const auto out = engine_->ProcessKey(ev);
+            ApplyOutput(pic ? pic : active_context_, out);
+        }
+    }
+    *pfEaten = will_handle ? TRUE : FALSE;
     return S_OK;
 }
 

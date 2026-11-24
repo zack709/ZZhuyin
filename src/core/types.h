@@ -121,6 +121,7 @@ struct KeyEvent {
 struct CandidateView {
     bool active           = false;
     bool is_associate     = false; // true: Shift+1..9 selects
+    bool has_selection    = false; // false when associate window opens without active selection
     size_t total_count    = 0;
     size_t selected_index = 0;
     size_t page_start     = 0;

@@ -171,7 +171,11 @@ bool ZhuyinEngine::HandleCandidateKey(const KeyEvent& ev, EngineOutput& out) {
     const bool has_shift = (ev.modifiers & mod::kShift) != 0;
 
     if (!has_ctrl && !has_alt) {
-        if ( !has_shift && (ev.vk_code == vk::kEscape || ev.vk_code == vk::kBackspace)) {
+        if (!has_shift && (ev.vk_code == vk::kEscape || ev.vk_code == vk::kBackspace)) {
+            if (candidates_.IsAssociate() && ev.vk_code == vk::kBackspace) {
+                candidates_.Close();
+                return false;
+            }
             candidates_.Close();
             composer_.Clear();
             out.handled = true;
@@ -182,11 +186,11 @@ bool ZhuyinEngine::HandleCandidateKey(const KeyEvent& ev, EngineOutput& out) {
             if (auto sel = candidates_.SelectCurrent()) {
                 const bool was_homophone = !candidates_.IsAssociate();
                 CommitAndMaybeAssociate(*sel, was_homophone, out);
-            } else {
-                candidates_.Close();
+                out.handled = true;
+                return true;
             }
-            out.handled = true;
-            return true;
+            candidates_.Close();
+            return false;
         }
 
         if (ev.vk_code == vk::kSpace || ev.vk_code == vk::kPageDown) {

@@ -163,17 +163,43 @@ TEST(T6_1_And_T6_2_AssociatePhraseSelectionVsTyping) {
     cfg.prompt_associate_phrase = true;
     zzhuyin::ZhuyinEngine engine(TestDict(), cfg);
 
-    // ㄅㄞˊ -> 白 + associate phrases
+    // ㄅㄞˊ -> 白 + associate phrases (no item auto-selected by default)
     engine.ProcessKey(MakeCharKey('1'));
     engine.ProcessKey(MakeCharKey('9'));
     auto o_assoc = engine.ProcessKey(MakeCharKey('6'));
     EXPECT_EQ(engine.State(), zzhuyin::EngineState::CandidateAssociate);
+    EXPECT_FALSE(o_assoc.candidates.has_selection);
     const std::u16string expected_first = o_assoc.candidates.page_items[0];
 
     // T6-1: Shift+1 selects first associate phrase
     auto o_shift1 = engine.ProcessKey(MakeCharKey('!', '1', zzhuyin::mod::kShift));
     EXPECT_TRUE(o_shift1.handled);
     EXPECT_EQ(o_shift1.commit_text, expected_first);
+    EXPECT_EQ(engine.State(), zzhuyin::EngineState::Idle);
+
+    // Trigger associate again: pressing Enter without selecting must NOT auto-select #1
+    engine.ProcessKey(MakeCharKey('1'));
+    engine.ProcessKey(MakeCharKey('9'));
+    engine.ProcessKey(MakeCharKey('6'));
+    EXPECT_EQ(engine.State(), zzhuyin::EngineState::CandidateAssociate);
+
+    auto o_enter = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kReturn));
+    EXPECT_FALSE(o_enter.handled);
+    EXPECT_TRUE(o_enter.commit_text.empty());
+    EXPECT_FALSE(o_enter.candidates.active);
+    EXPECT_EQ(engine.State(), zzhuyin::EngineState::Idle);
+
+    // Trigger associate again: Down arrow explicitly selects #1, then Enter commits it
+    engine.ProcessKey(MakeCharKey('1'));
+    engine.ProcessKey(MakeCharKey('9'));
+    engine.ProcessKey(MakeCharKey('6'));
+    auto o_down = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kDown));
+    EXPECT_TRUE(o_down.handled);
+    EXPECT_TRUE(o_down.candidates.has_selection);
+    EXPECT_EQ(o_down.candidates.selected_index, 0u);
+    auto o_enter_sel = engine.ProcessKey(MakeVkKey(zzhuyin::vk::kReturn));
+    EXPECT_TRUE(o_enter_sel.handled);
+    EXPECT_EQ(o_enter_sel.commit_text, expected_first);
     EXPECT_EQ(engine.State(), zzhuyin::EngineState::Idle);
 
     // Trigger associate again

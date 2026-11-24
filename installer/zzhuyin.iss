@@ -1,21 +1,24 @@
 ; ZZhuyin (Z注音) Inno Setup Installer Script
-; Supports building separate x64 and x86 installers via /DArch=x64 or /DArch=x86
+; Supports building separate x64, arm64, and x86 installers via /DArch=x64, /DArch=arm64, or /DArch=x86
 ;
 ; Example:
-;   iscc /DArch=x64 /DAppVersion=0.1.1 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
-;   iscc /DArch=x86 /DAppVersion=0.1.1 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x64 /DAppVersion=0.1.3 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=arm64 /DAppVersion=0.1.3 /DBuildDir=..\build-release-arm64 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x86 /DAppVersion=0.1.3 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
 
 #ifndef Arch
   #define Arch "x64"
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.2"
+  #define AppVersion "0.1.3"
 #endif
 
 #ifndef BuildDir
   #if Arch == "x64"
     #define BuildDir "..\build-release"
+  #elif Arch == "arm64"
+    #define BuildDir "..\build-release-arm64"
   #else
     #define BuildDir "..\build-release-x86"
   #endif
@@ -39,6 +42,14 @@ DefaultDirName={autopf}\ZZhuyin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputBaseFilename=ZZhuyin-Setup-{#AppVersion}-x64
+#elif Arch == "arm64"
+AppId={{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A12}
+AppName={#AppName} (ARM64)
+AppVerName={#AppName} {#AppVersion} (ARM64)
+DefaultDirName={autopf}\ZZhuyin
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+OutputBaseFilename=ZZhuyin-Setup-{#AppVersion}-arm64
 #else
 AppId={{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A11}
 AppName={#AppName} (x86)

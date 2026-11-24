@@ -288,7 +288,7 @@ void CandidateWindow::Paint(HDC hdc) {
 
     for (size_t i = 0; i < view_.page_items.size() && i < item_rects_.size(); ++i) {
         const RECT& item_rc = item_rects_[i];
-        const bool selected = (i == local_sel);
+        const bool selected = view_.has_selection && (i == local_sel);
         const bool hovered  = (!selected && static_cast<int>(i) == hover_index_);
 
         if (selected) {

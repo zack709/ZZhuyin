@@ -19,6 +19,7 @@ public:
 
     bool IsActive() const { return active_; }
     bool IsAssociate() const { return is_associate_; }
+    bool HasSelection() const { return has_selection_; }
     size_t Count() const { return items_.size(); }
     size_t SelectedIndex() const { return selected_index_; }
 
@@ -39,6 +40,7 @@ public:
 private:
     bool active_ = false;
     bool is_associate_ = false;
+    bool has_selection_ = false;
     size_t selected_index_ = 0;
     std::vector<std::u16string> items_;
 };

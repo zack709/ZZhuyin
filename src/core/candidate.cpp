@@ -8,6 +8,7 @@ void CandidateManager::OpenHomophone(std::vector<std::u16string> items) {
     items_ = std::move(items);
     active_ = !items_.empty();
     is_associate_ = false;
+    has_selection_ = active_;
     selected_index_ = 0;
 }
 
@@ -15,12 +16,14 @@ void CandidateManager::OpenAssociate(std::vector<std::u16string> items) {
     items_ = std::move(items);
     active_ = !items_.empty();
     is_associate_ = true;
+    has_selection_ = false;
     selected_index_ = 0;
 }
 
 void CandidateManager::Close() {
     active_ = false;
     is_associate_ = false;
+    has_selection_ = false;
     selected_index_ = 0;
     items_.clear();
 }
@@ -56,12 +59,23 @@ void CandidateManager::MoveUp() {
     if (!active_ || n == 0) {
         return;
     }
+    if (!has_selection_) {
+        has_selection_ = true;
+        const size_t page_start = (selected_index_ / kPageSize) * kPageSize;
+        selected_index_ = std::min(page_start + kPageSize, n) - 1;
+        return;
+    }
     selected_index_ = (selected_index_ > 0) ? (selected_index_ - 1) : (n - 1);
 }
 
 void CandidateManager::MoveDown() {
     const size_t n = items_.size();
     if (!active_ || n == 0) {
+        return;
+    }
+    if (!has_selection_) {
+        has_selection_ = true;
+        selected_index_ = (selected_index_ / kPageSize) * kPageSize;
         return;
     }
     selected_index_ = (selected_index_ + 1 < n) ? (selected_index_ + 1) : 0;
@@ -80,7 +94,7 @@ std::optional<std::u16string> CandidateManager::SelectOnPage(size_t page_offset)
 }
 
 std::optional<std::u16string> CandidateManager::SelectCurrent() const {
-    if (!active_ || selected_index_ >= items_.size()) {
+    if (!active_ || !has_selection_ || selected_index_ >= items_.size()) {
         return std::nullopt;
     }
     return items_[selected_index_];
@@ -93,6 +107,7 @@ CandidateView CandidateManager::View() const {
     }
     view.active = true;
     view.is_associate = is_associate_;
+    view.has_selection = has_selection_;
     view.total_count = items_.size();
     view.selected_index = selected_index_;
     view.page_start = (selected_index_ / kPageSize) * kPageSize;

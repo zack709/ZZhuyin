@@ -1,6 +1,6 @@
 # Z注音（ZZhuyin）
 
-在 **Windows 10 / 11（x64 / x86）** 上以 **TSF（Text Services Framework）** 復刻 **Windows 7 傳統注音（「ㄅ半」）** 手感與規則的繁體中文輸入法。
+在 **Windows 10 / 11（x64 / ARM64 / x86）** 上以 **TSF（Text Services Framework）** 復刻 **Windows 7 傳統注音（「ㄅ半」）** 手感與規則的繁體中文輸入法。
 
 本專案採 **純 C++20 核心邏輯層**（零 Win32 / UI 相依）與 **薄型 TSF COM 外殼層** 分離設計，提供流暢穩定的傳統單字注音體驗。
 
@@ -16,7 +16,7 @@
 - **四種內建鍵盤配置**：支援 **標準大千**、**倚天（ETen）**、**IBM**、**精業（Gin-Yieh）**，並於設定畫面提供即時 5 排注音鍵盤預覽圖。
 - **經典 9 字分頁與相關字詞（聯想詞）**：
   - `1`～`9` 選字、`Space` / `PageDown` 循環翻頁、`PageUp` 不循環、`↑` / `↓` 首尾循環、`Esc` / `Backspace` 取消選字。
-  - 啟用相關字詞時採 `Shift + 1`～`9` 選詞，裸按 `1`～`9` 自動關閉聯想窗並開始新組字，不干擾大千鍵盤連續輸入。
+  - 啟用相關字詞時採 `Shift + 1`～`9` 或滑鼠點選，預設不自動預選第一項（未選取時按 `Enter` / `Backspace` 直接關閉聯想窗並放行按鍵），裸按 `1`～`9` 自動關閉聯想窗並開始新組字，不干擾大千鍵盤連續輸入。
 - **完整快捷鍵與全形符號小鍵盤**：
   - 支援 **`Ctrl + Space`**、**`Left Shift` 短按（`< 401 ms`）** 或點擊系統匣 `ㄅ`／`英` 圖示切換中／英文（與 Windows `GUID_COMPARTMENT_KEYBOARD_OPENCLOSE` 雙向同步）。
   - 支援 **`Ctrl + Alt + ,`** 開啟 47 鍵全形標點符號螢幕小鍵盤（支援滑鼠點選或實體鍵盤對應按鍵，選完自動關閉），以及 13 組 `Ctrl` / `Ctrl + Alt` 標點快捷鍵。
@@ -30,7 +30,8 @@
 
 ### 方式一：下載安裝檔（推薦）
 前往 [GitHub Releases](https://github.com/zack709/ZZhuyin/releases) 依系統架構下載對應的安裝程式：
-- 64 位元 Windows：`ZZhuyin-Setup-<版本>-x64.exe`
+- 64 位元 Windows（x64）：`ZZhuyin-Setup-<版本>-x64.exe`
+- Windows on ARM（ARM64）：`ZZhuyin-Setup-<版本>-arm64.exe`
 - 32 位元 Windows（或 64 位元系統上需支援 32 位元程式）：`ZZhuyin-Setup-<版本>-x86.exe`
 
 執行安裝程式後即可透過 `Win + Space` 切換至 **「Z注音」**。
@@ -58,9 +59,9 @@ python tools/build_zdict.py --fetch-chewing -o build-release/zzhuyin.zdict
 ZZhuyin/
 ├── CMakeLists.txt              # CMake 建置設定（Core、Tests、TSF DLL）
 ├── .github/workflows/
-│   └── release.yml             # GitHub Actions 自動編譯 x64/x86 安裝檔與發佈 Release
+│   └── release.yml             # GitHub Actions 自動編譯 x64/arm64/x86 安裝檔與發佈 Release
 ├── installer/
-│   └── zzhuyin.iss             # Inno Setup 安裝腳本（支援獨立產出 x64 與 x86）
+│   └── zzhuyin.iss             # Inno Setup 安裝腳本（支援獨立產出 x64、arm64 與 x86）
 ├── src/
 │   ├── core/                   # zzhuyin_core（純標準 C++20，零 Windows 相依）
 │   │   ├── types.h             # 16-bit 注音編碼、事件與設定結構
@@ -96,7 +97,7 @@ ZZhuyin/
 - Python 3.10+（打包字表用）
 - Inno Setup 6（選配，於本機打包 `.exe` 安裝檔用）
 
-### 編譯 Release x64 與 x86
+### 編譯 Release x64、ARM64 與 x86
 
 ```bat
 :: 建置 x64 Release 並執行測試
@@ -104,6 +105,11 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release
 ctest --test-dir build-release --output-on-failure
+
+:: 建置 ARM64 Release（需於 Visual Studio Installer 勾選 MSVC C++ ARM64 建置工具）
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" amd64_arm64
+cmake -B build-release-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=ARM64
+cmake --build build-release-arm64
 
 :: 建置 x86 Release 並執行測試
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat"
