@@ -429,3 +429,59 @@ TEST(SymbolKeyboardCtrlAltComma) {
     EXPECT_TRUE(o_bo.handled);
     EXPECT_EQ(o_bo.composition, u"ㄅ");
 }
+
+TEST(NumpadAlwaysHalfWidthInAllModes) {
+    zzhuyin::ZhuyinEngine engine(TestDict());
+
+    struct NumpadCase {
+        uint16_t vk;
+        char ch;
+    };
+    const NumpadCase cases[] = {
+        {zzhuyin::vk::kNumpad0, '0'},
+        {zzhuyin::vk::kNumpad9, '9'},
+        {zzhuyin::vk::kMultiply, '*'},
+        {zzhuyin::vk::kAdd, '+'},
+        {zzhuyin::vk::kSubtract, '-'},
+        {zzhuyin::vk::kDecimal, '.'},
+        {zzhuyin::vk::kDivide, '/'},
+    };
+
+    // 1. Chinese + Half-shape: Numpad '.' must NOT become '。', all pass through as half-width
+    for (const auto& c : cases) {
+        auto out = engine.ProcessKey(MakeCharKey(c.ch, c.vk));
+        EXPECT_FALSE(out.handled);
+        EXPECT_TRUE(out.commit_text.empty());
+    }
+
+    // 2. Chinese + Full-shape: Numpad keys must still pass through as half-width
+    engine.SetFullShapeMode(true);
+    for (const auto& c : cases) {
+        auto out = engine.ProcessKey(MakeCharKey(c.ch, c.vk));
+        EXPECT_FALSE(out.handled);
+        EXPECT_TRUE(out.commit_text.empty());
+    }
+
+    // 3. English + Full-shape: Numpad keys must still pass through as half-width
+    engine.SetNativeMode(false);
+    for (const auto& c : cases) {
+        auto out = engine.ProcessKey(MakeCharKey(c.ch, c.vk));
+        EXPECT_FALSE(out.handled);
+        EXPECT_TRUE(out.commit_text.empty());
+    }
+
+    // 4. Chinese + Full-shape while candidate window is open:
+    //    Numpad '1' auto-commits #1 candidate + half-width '1' (not '１')
+    if (TestDict().IsLoaded()) {
+        engine.SetNativeMode(true);
+        engine.ProcessKey(MakeCharKey('5'));
+        engine.ProcessKey(MakeCharKey('j'));
+        engine.ProcessKey(MakeCharKey('4')); // ㄓㄨˋ -> candidate #1 is 住
+        EXPECT_EQ(engine.State(), zzhuyin::EngineState::CandidateHomophone);
+
+        auto out = engine.ProcessKey(MakeCharKey('1', zzhuyin::vk::kNumpad0 + 1));
+        EXPECT_TRUE(out.handled);
+        EXPECT_EQ(out.commit_text, u"住1");
+        EXPECT_EQ(engine.State(), zzhuyin::EngineState::Idle);
+    }
+}

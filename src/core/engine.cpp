@@ -418,7 +418,7 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
     // English mode
     if (!native_mode_) {
         const bool has_ctrl_alt = (ev.modifiers & (mod::kControl | mod::kAlt)) != 0;
-        if (full_shape_ && !has_ctrl_alt) {
+        if (full_shape_ && !has_ctrl_alt && !IsNumpadKey(ev.vk_code)) {
             if (auto fw = KeyMapper::ToFullShapeAscii(ev.unicode_char)) {
                 out.commit_text.push_back(*fw);
                 out.handled = true;
@@ -495,10 +495,11 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
         return out;
     }
 
-    // Priority 4: Direct full-width punctuation & full-shape ASCII
+    // Priority 4: Direct full-width punctuation & full-shape ASCII (Numpad always stays half-width)
     const bool has_ctrl_alt = (ev.modifiers & (mod::kControl | mod::kAlt)) != 0;
     if (!has_ctrl_alt) {
-        if (cfg_.enable_punctuation_input) {
+        const bool is_numpad = IsNumpadKey(ev.vk_code);
+        if (cfg_.enable_punctuation_input && !is_numpad) {
             if (auto punc = KeyMapper::MapDirectFullWidthPunctuation(ev.unicode_char)) {
                 composer_.Clear();
                 out.commit_text.push_back(*punc);
@@ -507,7 +508,7 @@ EngineOutput ZhuyinEngine::ProcessKey(const KeyEvent& ev) {
                 return out;
             }
         }
-        if (full_shape_) {
+        if (full_shape_ && !is_numpad) {
             if (auto fw = KeyMapper::ToFullShapeAscii(ev.unicode_char)) {
                 composer_.Clear();
                 out.commit_text.push_back(*fw);
