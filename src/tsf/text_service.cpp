@@ -667,7 +667,10 @@ void TextService::InitLangBar() {
     LangBarCallbacks cbs;
     cbs.is_native = [this]() { return engine_ ? engine_->IsNativeMode() : true; };
     cbs.is_full_shape = [this]() { return engine_ ? engine_->IsFullShapeMode() : false; };
-    cbs.get_config = [this]() { return config_; };
+    cbs.get_config = [this]() {
+        config_ = ConfigStore::Load();
+        return config_;
+    };
     cbs.toggle_native = [this]() {
         if (engine_) {
             engine_->SetNativeMode(!engine_->IsNativeMode());

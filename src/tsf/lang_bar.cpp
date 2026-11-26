@@ -13,16 +13,63 @@ extern void DllRelease();
 
 namespace {
 
-constexpr DWORD kLangBarSinkCookie = 0x5A5A0001;
-constexpr UINT  kMenuOpenSettings  = 501;
+constexpr DWORD kLangBarSinkCookie    = 0x5A5A0001;
+constexpr UINT  kMenuOpenSettings     = 501;
+constexpr UINT  kMenuOutputScript     = 502;
+constexpr UINT  kMenuOutputTrad       = 503;
+constexpr UINT  kMenuOutputSimplified = 504;
+
+void HandleMenuCommand(UINT cmd, const LangBarCallbacks& cb) {
+    if (cmd == kMenuOpenSettings) {
+        if (cb.open_settings) {
+            cb.open_settings();
+        }
+    } else if (cmd == kMenuOutputTrad || cmd == kMenuOutputSimplified) {
+        if (cb.update_config) {
+            PersistedConfig cfg = cb.get_config ? cb.get_config() : PersistedConfig{};
+            cfg.engine.output_simplified = (cmd == kMenuOutputSimplified);
+            cb.update_config(cfg);
+        }
+    }
+}
 
 void ShowRightClickPopup(
-    POINT pt, const RECT* prcArea, const std::function<void()>& open_settings) {
-    if (!open_settings) return;
-
+    POINT pt, const RECT* prcArea, const LangBarCallbacks& cb) {
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
-    AppendMenuW(menu, MF_STRING, kMenuOpenSettings, L"設定值");
+
+    const PersistedConfig cfg = cb.get_config ? cb.get_config() : PersistedConfig{};
+    const bool is_simplified = cfg.engine.output_simplified;
+
+    bool has_script_menu = false;
+    if (HMENU script_submenu = CreatePopupMenu()) {
+        AppendMenuW(
+            script_submenu,
+            MF_STRING | (!is_simplified ? MF_CHECKED : MF_UNCHECKED),
+            kMenuOutputTrad,
+            L"繁體");
+        AppendMenuW(
+            script_submenu,
+            MF_STRING | (is_simplified ? MF_CHECKED : MF_UNCHECKED),
+            kMenuOutputSimplified,
+            L"簡體");
+        if (AppendMenuW(
+                menu,
+                MF_POPUP,
+                reinterpret_cast<UINT_PTR>(script_submenu),
+                L"輸出字種")) {
+            has_script_menu = true;
+        } else {
+            DestroyMenu(script_submenu);
+        }
+    }
+
+    if (cb.open_settings) {
+        if (has_script_menu) {
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
+        AppendMenuW(menu, MF_STRING, kMenuOpenSettings, L"設定值");
+    }
 
     // A temporary hidden window is required so TrackPopupMenuEx dismisses cleanly on click-away
     HWND helper = CreateWindowExW(
@@ -51,9 +98,7 @@ void ShowRightClickPopup(
         PostMessageW(helper, WM_NULL, 0, 0);
         DestroyWindow(helper);
 
-        if (cmd == kMenuOpenSettings) {
-            open_settings();
-        }
+        HandleMenuCommand(cmd, cb);
     }
     DestroyMenu(menu);
 }
@@ -137,24 +182,49 @@ STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT pt, const RECT* prcA
         cb_.toggle_native();
         NotifyUpdate();
     } else if (click == TF_LBI_CLK_RIGHT) {
-        ShowRightClickPopup(pt, prcArea, cb_.open_settings);
+        ShowRightClickPopup(pt, prcArea, cb_);
     }
     return S_OK;
 }
 
 STDMETHODIMP LangBarButton::InitMenu(ITfMenu* pMenu) {
     if (!pMenu) return E_INVALIDARG;
-    constexpr wchar_t kText[] = L"設定值";
+
+    const PersistedConfig cfg = cb_.get_config ? cb_.get_config() : PersistedConfig{};
+    const bool is_simplified = cfg.engine.output_simplified;
+
+    constexpr wchar_t kOutputScriptText[] = L"輸出字種";
+    ITfMenu* sub_menu = nullptr;
+    if (SUCCEEDED(pMenu->AddMenuItem(
+            kMenuOutputScript, TF_LBMENUF_SUBMENU, nullptr, nullptr,
+            kOutputScriptText, static_cast<ULONG>(wcslen(kOutputScriptText)),
+            &sub_menu)) && sub_menu) {
+        constexpr wchar_t kTradText[] = L"繁體";
+        constexpr wchar_t kSimpText[] = L"簡體";
+        sub_menu->AddMenuItem(
+            kMenuOutputTrad,
+            !is_simplified ? TF_LBMENUF_CHECKED : 0,
+            nullptr, nullptr,
+            kTradText, static_cast<ULONG>(wcslen(kTradText)), nullptr);
+        sub_menu->AddMenuItem(
+            kMenuOutputSimplified,
+            is_simplified ? TF_LBMENUF_CHECKED : 0,
+            nullptr, nullptr,
+            kSimpText, static_cast<ULONG>(wcslen(kSimpText)), nullptr);
+        sub_menu->Release();
+    }
+
+    pMenu->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, nullptr, 0, nullptr);
+
+    constexpr wchar_t kSettingsText[] = L"設定值";
     pMenu->AddMenuItem(
         kMenuOpenSettings, 0, nullptr, nullptr,
-        kText, static_cast<ULONG>(wcslen(kText)), nullptr);
+        kSettingsText, static_cast<ULONG>(wcslen(kSettingsText)), nullptr);
     return S_OK;
 }
 
 STDMETHODIMP LangBarButton::OnMenuSelect(UINT wID) {
-    if (wID == kMenuOpenSettings && cb_.open_settings) {
-        cb_.open_settings();
-    }
+    HandleMenuCommand(wID, cb_);
     return S_OK;
 }
 

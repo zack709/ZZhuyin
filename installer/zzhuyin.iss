@@ -2,16 +2,16 @@
 ; Supports building separate x64, arm64, and x86 installers via /DArch=x64, /DArch=arm64, or /DArch=x86
 ;
 ; Example:
-;   iscc /DArch=x64 /DAppVersion=0.1.3 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
-;   iscc /DArch=arm64 /DAppVersion=0.1.3 /DBuildDir=..\build-release-arm64 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
-;   iscc /DArch=x86 /DAppVersion=0.1.3 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x64 /DAppVersion=0.1.4 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=arm64 /DAppVersion=0.1.4 /DBuildDir=..\build-release-arm64 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x86 /DAppVersion=0.1.4 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
 
 #ifndef Arch
   #define Arch "x64"
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.3"
+  #define AppVersion "0.1.4"
 #endif
 
 #ifndef BuildDir
