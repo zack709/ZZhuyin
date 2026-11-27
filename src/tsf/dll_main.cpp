@@ -157,7 +157,7 @@ HRESULT RegisterProfilesAndCategories() {
         static_cast<ULONG>(wcslen(kProfileDescription)),
         dll_path,
         static_cast<ULONG>(wcslen(dll_path)),
-        0,
+        0, // First icon in zzhuyin_tsf.rc (IDI_ZZHUYIN_ICON)
         nullptr,
         0,
         TRUE,

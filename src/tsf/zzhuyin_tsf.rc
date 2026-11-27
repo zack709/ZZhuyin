@@ -1,0 +1,3 @@
+#include "resource.h"
+
+IDI_ZZHUYIN_ICON ICON "zzhuyin.ico"

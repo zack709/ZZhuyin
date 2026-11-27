@@ -35,6 +35,7 @@ if(WIN32)
         src/tsf/config_reg.cpp
         src/tsf/settings_dlg.cpp
         src/tsf/zzhuyin_tsf.def
+        src/tsf/zzhuyin_tsf.rc
     )
     target_link_libraries(zzhuyin_tsf PRIVATE
         zzhuyin_core
