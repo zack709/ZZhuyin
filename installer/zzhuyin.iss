@@ -2,16 +2,16 @@
 ; Supports building separate x64, arm64, and x86 installers via /DArch=x64, /DArch=arm64, or /DArch=x86
 ;
 ; Example:
-;   iscc /DArch=x64 /DAppVersion=0.1.4 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
-;   iscc /DArch=arm64 /DAppVersion=0.1.4 /DBuildDir=..\build-release-arm64 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
-;   iscc /DArch=x86 /DAppVersion=0.1.4 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x64 /DAppVersion=0.1.5 /DBuildDir=..\build-release /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=arm64 /DAppVersion=0.1.5 /DBuildDir=..\build-release-arm64 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
+;   iscc /DArch=x86 /DAppVersion=0.1.5 /DBuildDir=..\build-release-x86 /DZDictFile=..\dist\zzhuyin.zdict /O..\dist installer\zzhuyin.iss
 
 #ifndef Arch
   #define Arch "x64"
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.4"
+  #define AppVersion "0.1.5"
 #endif
 
 #ifndef BuildDir
@@ -22,6 +22,10 @@
   #else
     #define BuildDir "..\build-release-x86"
   #endif
+#endif
+
+#ifndef BuildDirX86
+  #define BuildDirX86 "..\build-release-x86"
 #endif
 
 #ifndef ZDictFile
@@ -36,8 +40,8 @@
 [Setup]
 #if Arch == "x64"
 AppId={{8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A10}
-AppName={#AppName} (x64)
-AppVerName={#AppName} {#AppVersion} (x64)
+AppName={#AppName} (x64/x86)
+AppVerName={#AppName} {#AppVersion} (x64/x86)
 DefaultDirName={autopf}\ZZhuyin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -70,7 +74,11 @@ PrivilegesRequired=admin
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+#if Arch == "x64"
+UninstallDisplayName={#AppName} (x64/x86)
+#else
 UninstallDisplayName={#AppName} ({#Arch})
+#endif
 CloseApplications=no
 
 [Languages]
@@ -78,6 +86,9 @@ Name: "default"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#BuildDir}\zzhuyin_tsf.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
+#if Arch == "x64"
+Source: "{#BuildDirX86}\zzhuyin_tsf.dll"; DestDir: "{app}\x86"; Flags: ignoreversion restartreplace uninsrestartdelete
+#endif
 Source: "{#ZDictFile}"; DestDir: "{app}"; DestName: "zzhuyin.zdict"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
@@ -86,11 +97,19 @@ Source: "..\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 [Run]
 ; Register TSF COM server (Inno Setup automatically routes {sys} to System32 for x64 or SysWOW64 for x86)
 Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\zzhuyin_tsf.dll"""; StatusMsg: "正在註冊 Z注音 輸入法元件..."; Flags: runhidden waituntilterminated
+#if Arch == "x64"
+; Also register 32-bit TSF COM server so 32-bit (x86) apps on 64-bit Windows can use ZZhuyin
+Filename: "{syswow64}\regsvr32.exe"; Parameters: "/s ""{app}\x86\zzhuyin_tsf.dll"""; StatusMsg: "正在註冊 Z注音 x86 相容元件..."; Flags: runhidden waituntilterminated
+#endif
 ; Add ZZhuyin TIP to the logged-in user's Windows 10/11 keyboard list
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$t='{#TipId}'; $l=Get-WinUserLanguageList; $z=$l | Where-Object {{$_.LanguageTag -like 'zh*'}} | Select-Object -First 1; if ($z -and -not ($z.InputMethodTips -contains $t)) {{ $z.InputMethodTips.Add($t); Set-WinUserLanguageList $l -Force -WarningAction SilentlyContinue }}"""; StatusMsg: "正在將 Z注音 加入系統鍵盤清單..."; Flags: runhidden waituntilterminated runasoriginaluser
 
 [UninstallRun]
 ; Remove ZZhuyin TIP from the user's keyboard list
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$t='{#TipId}'; $l=Get-WinUserLanguageList; $z=$l | Where-Object {{$_.LanguageTag -like 'zh*'}} | Select-Object -First 1; if ($z -and ($z.InputMethodTips -contains $t)) {{ [void]$z.InputMethodTips.Remove($t); Set-WinUserLanguageList $l -Force -WarningAction SilentlyContinue }}"""; RunOnceId: "RemoveZZhuyinTip"; Flags: runhidden waituntilterminated
+#if Arch == "x64"
+; Unregister 32-bit TSF COM server
+Filename: "{syswow64}\regsvr32.exe"; Parameters: "/u /s ""{app}\x86\zzhuyin_tsf.dll"""; RunOnceId: "UnregZZhuyinDllX86"; Flags: runhidden waituntilterminated
+#endif
 ; Unregister TSF COM server
 Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\zzhuyin_tsf.dll"""; RunOnceId: "UnregZZhuyinDll"; Flags: runhidden waituntilterminated

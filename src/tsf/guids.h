@@ -34,6 +34,16 @@ inline constexpr GUID kGuidPreservedKeySymbolKeyboard = {
     0x8e4a7c31, 0x2b5d, 0x4f19, {0x9a, 0x63, 0x7d, 0x1e, 0x4b, 0x8c, 0x2a, 0x06}
 };
 
+// {8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A07}
+inline constexpr GUID kGuidPreservedKeyToggleLeftShift = {
+    0x8e4a7c31, 0x2b5d, 0x4f19, {0x9a, 0x63, 0x7d, 0x1e, 0x4b, 0x8c, 0x2a, 0x07}
+};
+
+// {8E4A7C31-2B5D-4F19-9A63-7D1E4B8C2A08}
+inline constexpr GUID kGuidPreservedKeyToggleRightShift = {
+    0x8e4a7c31, 0x2b5d, 0x4f19, {0x9a, 0x63, 0x7d, 0x1e, 0x4b, 0x8c, 0x2a, 0x08}
+};
+
 // Standard Windows 8/10/11 system tray IME input mode button GUID (GUID_LBI_INPUTMODE)
 // {2C77A81E-41CC-4178-A3A7-5F8A987568E6}
 inline constexpr GUID kGuidLbiInputMode = {

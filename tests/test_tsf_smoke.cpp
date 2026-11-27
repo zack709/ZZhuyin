@@ -142,6 +142,49 @@ int main() {
             }
         }
         RegDeleteTreeW(HKEY_CURRENT_USER, kTestKey);
+
+        // Verify YAML export/import round-trip
+        in_cfg.engine.default_native_mode = false;
+        in_cfg.engine.enable_punctuation_input = false;
+        in_cfg.engine.enable_warning_beep = false;
+        in_cfg.engine.left_shift_toggle_mode = false;
+        in_cfg.engine.right_shift_toggle_mode = true;
+        in_cfg.engine.charset_filter.output_big5_only = true;
+        in_cfg.engine.charset_filter.include_ext_b = true;
+        in_cfg.engine.charset_filter.allow_cns = true;
+        in_cfg.engine.charset_filter.include_hkscs = true;
+
+        const std::string yaml = zzhuyin::tsf::ConfigStore::ToYaml(in_cfg);
+        zzhuyin::tsf::PersistedConfig parsed{};
+        if (!zzhuyin::tsf::ConfigStore::FromYaml(yaml, parsed)) {
+            std::cerr << "ConfigStore::FromYaml failed\n";
+            ok = false;
+        } else if (
+            parsed.engine.layout != in_cfg.engine.layout ||
+            parsed.engine.default_native_mode != in_cfg.engine.default_native_mode ||
+            parsed.engine.orientation != in_cfg.engine.orientation ||
+            parsed.ui.font_size_pt != in_cfg.ui.font_size_pt ||
+            parsed.ui.dark_theme != in_cfg.ui.dark_theme ||
+            parsed.engine.prompt_associate_phrase != in_cfg.engine.prompt_associate_phrase ||
+            parsed.engine.output_simplified != in_cfg.engine.output_simplified ||
+            parsed.engine.enable_punctuation_input != in_cfg.engine.enable_punctuation_input ||
+            parsed.engine.enable_warning_beep != in_cfg.engine.enable_warning_beep ||
+            parsed.engine.left_shift_toggle_mode != in_cfg.engine.left_shift_toggle_mode ||
+            parsed.engine.right_shift_toggle_mode != in_cfg.engine.right_shift_toggle_mode ||
+            parsed.engine.charset_filter.output_big5_only != in_cfg.engine.charset_filter.output_big5_only ||
+            parsed.engine.charset_filter.include_ext_a != in_cfg.engine.charset_filter.include_ext_a ||
+            parsed.engine.charset_filter.include_ext_b != in_cfg.engine.charset_filter.include_ext_b ||
+            parsed.engine.charset_filter.allow_cns != in_cfg.engine.charset_filter.allow_cns ||
+            parsed.engine.charset_filter.include_hkscs != in_cfg.engine.charset_filter.include_hkscs) {
+            std::cerr << "ConfigStore YAML round-trip mismatch\n";
+            ok = false;
+        }
+
+        zzhuyin::tsf::PersistedConfig bad{};
+        if (zzhuyin::tsf::ConfigStore::FromYaml("not_a_valid_config: 123\n", bad)) {
+            std::cerr << "ConfigStore::FromYaml should reject unrecognized YAML\n";
+            ok = false;
+        }
     }
 
     FreeLibrary(mod);

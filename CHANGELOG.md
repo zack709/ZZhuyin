@@ -4,6 +4,24 @@
 
 ---
 
+## [0.1.5] - 2026-11-27
+
+### 新增與改進
+- **於系統鍵盤切換選單顯示 Z注音 圖示**：
+  - 將與工作列一致的經典深青色鍵帽框「ㄅ」多尺寸圖示（`src/tsf/zzhuyin.ico`）透過資源檔（`src/tsf/zzhuyin_tsf.rc`）內嵌至 `zzhuyin_tsf.dll`，對應 TSF 註冊的 `IconIndex = 0`。
+  - 在 Windows 11 `Win + 空白鍵` 鍵盤配置切換選單中直接顯示 Z注音 圖示，不再退回顯示「繁體」文字。
+- **x64 安裝檔升級為 x64 / x86 合一安裝版**：
+  - 更新 [installer/zzhuyin.iss](installer/zzhuyin.iss) 與 [.github/workflows/release.yml](.github/workflows/release.yml)，`ZZhuyin-Setup-<版本>-x64.exe` 現已同時包含 64 位元（`zzhuyin_tsf.dll`）與 32 位元相容元件（`x86\zzhuyin_tsf.dll`），並共用同一份 `zzhuyin.zdict`。
+  - 在 64 位元 Windows 上執行一次安裝程式即可自動註冊 x64 與 x86 TSF 元件，同時支援 64 位元與 32 位元應用程式（解除安裝亦一併反註冊兩者）。
+- **x86 與 x64 設定統一**：
+  - 於 `ConfigStore` 讀寫 `HKEY_CURRENT_USER\Software\ZZhuyin` 時明確指定 `KEY_WOW64_64KEY`，確保 32 位元與 64 位元應用程式永遠共用同一份設定，不需重複設定。
+- **設定視窗新增「設定檔」分頁（YAML 匯出／匯入）**：
+  - 於「Z注音 設定」視窗新增第 4 個分頁「**設定檔**」，提供「**匯出(E)...**」與「**匯入(I)...**」按鈕，透過系統檔案選擇視窗將所有設定匯出為 `.yaml` 檔案備份，或從 `.yaml` 檔案還原設定。
+- **不限文字輸入框皆可切換中文／英數模式**：
+  - 透過 TSF `TF_PRESERVEDKEY`（`TF_MOD_LSHIFT | TF_MOD_ON_KEYUP`、`TF_MOD_RSHIFT | TF_MOD_ON_KEYUP`）註冊左／右 Shift 鍵，並將非編輯區（`GUID_COMPARTMENT_EMPTYCONTEXT`／`GUID_COMPARTMENT_KEYBOARD_DISABLED`）與實際密碼欄位區分，使桌面、檔案總管或任意非輸入框焦點下皆可直接以 `Shift`、`Ctrl + Space` 或工作列圖示切換中文／英數模式（實際密碼欄位仍會自動維持英文模式）。
+
+---
+
 ## [0.1.4] - 2026-11-26
 
 ### 新增與改進

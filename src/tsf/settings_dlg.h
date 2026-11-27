@@ -7,7 +7,7 @@
 
 namespace zzhuyin::tsf {
 
-// Opens the 3-tab "Z注音 設定" window directly from zzhuyin_tsf.dll on its own UI thread
+// Opens the 4-tab "Z注音 設定" window directly from zzhuyin_tsf.dll on its own UI thread
 // (non-blocking for the host application). If already open, brings the existing window to front.
 void ShowSettingsDialog(
     HINSTANCE hInst,

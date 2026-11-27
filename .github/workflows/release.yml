@@ -37,7 +37,7 @@ jobs:
             if ($cmake -match 'project\(ZZhuyin\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)') {
               $version = $Matches[1]
             } else {
-              $version = "0.1.4"
+              $version = "0.1.5"
             }
           }
           echo "version=$version" >> $env:GITHUB_OUTPUT
@@ -117,7 +117,7 @@ jobs:
           }
           echo "iscc=$iscc" >> $env:GITHUB_OUTPUT
 
-      - name: Package x64 Installer
+      - name: Package x64 (x64+x86) Installer
         shell: pwsh
         run: |
           $ver = "${{ steps.ver.outputs.version }}"
@@ -125,6 +125,7 @@ jobs:
             "/DArch=x64" `
             "/DAppVersion=$ver" `
             "/DBuildDir=..\build-release" `
+            "/DBuildDirX86=..\build-release-x86" `
             "/DZDictFile=..\dist\zzhuyin.zdict" `
             "/Odist" `
             "installer\zzhuyin.iss"

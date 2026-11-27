@@ -5,6 +5,7 @@
 #include "tsf/lang_bar.h"
 
 #include <commctrl.h>
+#include <commdlg.h>
 
 #include <algorithm>
 #include <atomic>
@@ -60,6 +61,10 @@ enum ControlId : int {
     kIdChkCns = 506,
     kIdCharsetOk = 507,
     kIdCharsetCancel = 508,
+
+    // Profile (設定檔) tab
+    kIdBtnExportProfile = 601,
+    kIdBtnImportProfile = 602,
 };
 
 struct FontSizeChoice {
@@ -208,6 +213,10 @@ struct SettingsApp {
     HWND cmb_layout = nullptr;
     HWND kbd_preview = nullptr;
 
+    std::vector<HWND> tab3_ctrls;
+    HWND btn_export = nullptr;
+    HWND btn_import = nullptr;
+
     int S(int px) const { return MulDiv(px, static_cast<int>(dpi), 96); }
 };
 
@@ -301,7 +310,7 @@ void ApplyThemeToMainWindow(SettingsApp& app) {
     const wchar_t* btn_theme = dark ? L"DarkMode_Explorer" : L"Explorer";
     const wchar_t* cmb_theme = dark ? L"DarkMode_CFD" : L"Explorer";
 
-    for (HWND h : {app.btn_ok, app.btn_cancel, app.btn_charset, app.btn_reset}) {
+    for (HWND h : {app.btn_ok, app.btn_cancel, app.btn_charset, app.btn_reset, app.btn_export, app.btn_import}) {
         ApplyUxTheme(h, btn_theme);
     }
     for (HWND h : {app.cmb_default_mode, app.cmb_font_size, app.cmb_orientation, app.cmb_theme, app.cmb_layout}) {
@@ -790,6 +799,7 @@ void ShowTabPage(SettingsApp& app, int tab_idx) {
     set_vis(app.tab0_ctrls, tab_idx == 0);
     set_vis(app.tab1_ctrls, tab_idx == 1);
     set_vis(app.tab2_ctrls, tab_idx == 2);
+    set_vis(app.tab3_ctrls, tab_idx == 3);
 }
 
 void BuildControls(SettingsApp& app) {
@@ -808,6 +818,7 @@ void BuildControls(SettingsApp& app) {
     ti.pszText = const_cast<LPWSTR>(L"一般"); TabCtrl_InsertItem(app.tab, 0, &ti);
     ti.pszText = const_cast<LPWSTR>(L"進階"); TabCtrl_InsertItem(app.tab, 1, &ti);
     ti.pszText = const_cast<LPWSTR>(L"鍵盤"); TabCtrl_InsertItem(app.tab, 2, &ti);
+    ti.pszText = const_cast<LPWSTR>(L"設定檔"); TabCtrl_InsertItem(app.tab, 3, &ti);
 
     app.btn_ok = CreateWindowExW(
         0, L"BUTTON", L"確認",
@@ -1012,6 +1023,30 @@ void BuildControls(SettingsApp& app) {
     SetWindowLongPtrW(app.kbd_preview, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&app));
     app.tab2_ctrls.push_back(app.kbd_preview);
 
+    // Tab 3: 設定檔
+    add_label(app.tab3_ctrls, L"設定檔:", 26, 48, 60, 18);
+    add_sep(app.tab3_ctrls, 88, 56, 368);
+
+    add_label(app.tab3_ctrls, L"您可以將目前的 Z注音 設定匯出為 YAML 檔案備份，或從 YAML 檔案匯入設定。", 38, 76, 412, 36);
+
+    add_label(app.tab3_ctrls, L"將目前的輸入法設定匯出為 .yaml 檔案：", 42, 128, 360, 18);
+    app.btn_export = CreateWindowExW(
+        0, L"BUTTON", L"匯出(E)...",
+        WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+        app.S(56), app.S(154), app.S(120), app.S(28),
+        parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIdBtnExportProfile)), app.hInst, nullptr);
+    ApplyFont(app.btn_export, app.font);
+    app.tab3_ctrls.push_back(app.btn_export);
+
+    add_label(app.tab3_ctrls, L"從 .yaml 檔案載入設定（匯入後請按「確認」套用並儲存）：", 42, 204, 400, 18);
+    app.btn_import = CreateWindowExW(
+        0, L"BUTTON", L"匯入(I)...",
+        WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+        app.S(56), app.S(230), app.S(120), app.S(28),
+        parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIdBtnImportProfile)), app.hInst, nullptr);
+    ApplyFont(app.btn_import, app.font);
+    app.tab3_ctrls.push_back(app.btn_import);
+
     LoadConfigIntoUi(app);
     ShowTabPage(app, 0);
 }
@@ -1144,6 +1179,48 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 if (sel >= 0 && sel < 4) {
                     app->cfg.engine.layout = static_cast<zzhuyin::KeyboardLayout>(sel + 1);
                     InvalidateRect(app->kbd_preview, nullptr, TRUE);
+                }
+                return 0;
+            }
+            if (id == kIdBtnExportProfile && code == BN_CLICKED) {
+                wchar_t file_buf[MAX_PATH] = L"zzhuyin-settings.yaml";
+                OPENFILENAMEW ofn{};
+                ofn.lStructSize = sizeof(ofn);
+                ofn.hwndOwner = hwnd;
+                ofn.lpstrFilter = L"YAML 設定檔 (*.yaml;*.yml)\0*.yaml;*.yml\0所有檔案 (*.*)\0*.*\0";
+                ofn.lpstrFile = file_buf;
+                ofn.nMaxFile = MAX_PATH;
+                ofn.lpstrDefExt = L"yaml";
+                ofn.lpstrTitle = L"匯出 Z注音 設定檔";
+                ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+                if (GetSaveFileNameW(&ofn)) {
+                    if (ConfigStore::ExportYamlFile(app->cfg, file_buf)) {
+                        MessageBoxW(hwnd, L"設定檔已成功匯出。", L"Z注音 設定", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxW(hwnd, L"無法寫入設定檔，請確認檔案路徑與權限。", L"Z注音 設定", MB_OK | MB_ICONERROR);
+                    }
+                }
+                return 0;
+            }
+            if (id == kIdBtnImportProfile && code == BN_CLICKED) {
+                wchar_t file_buf[MAX_PATH] = {};
+                OPENFILENAMEW ofn{};
+                ofn.lStructSize = sizeof(ofn);
+                ofn.hwndOwner = hwnd;
+                ofn.lpstrFilter = L"YAML 設定檔 (*.yaml;*.yml)\0*.yaml;*.yml\0所有檔案 (*.*)\0*.*\0";
+                ofn.lpstrFile = file_buf;
+                ofn.nMaxFile = MAX_PATH;
+                ofn.lpstrTitle = L"匯入 Z注音 設定檔";
+                ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+                if (GetOpenFileNameW(&ofn)) {
+                    PersistedConfig imported{};
+                    if (ConfigStore::ImportYamlFile(file_buf, imported)) {
+                        app->cfg = imported;
+                        LoadConfigIntoUi(*app);
+                        MessageBoxW(hwnd, L"設定檔已匯入，請按「確認」以套用並儲存設定。", L"Z注音 設定", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxW(hwnd, L"無法讀取或解析設定檔，請確認為有效的 YAML 設定檔。", L"Z注音 設定", MB_OK | MB_ICONERROR);
+                    }
                 }
                 return 0;
             }

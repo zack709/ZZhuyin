@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ZZhuyin VERSION 0.1.4 LANGUAGES CXX)
+project(ZZhuyin VERSION 0.1.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +40,7 @@ if(WIN32)
     target_link_libraries(zzhuyin_tsf PRIVATE
         zzhuyin_core
         comctl32
+        comdlg32
         ole32
         oleaut32
         advapi32

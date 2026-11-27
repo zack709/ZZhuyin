@@ -75,6 +75,7 @@ private:
     void UninitThreadMgrEventSink();
     bool InitKeyEventSink();
     void UninitKeyEventSink();
+    void SyncShiftPreservedKeys();
     void InitOpenCloseCompartment();
     void UninitOpenCloseCompartment();
     void SyncOpenCloseCompartment();
@@ -103,6 +104,8 @@ private:
     TfClientId client_id_ = TF_CLIENTID_NULL;
     DWORD thread_mgr_sink_cookie_ = TF_INVALID_COOKIE;
     TfGuidAtom display_attr_atom_ = TF_INVALID_GUIDATOM;
+    bool lshift_preserved_ = false;
+    bool rshift_preserved_ = false;
 
     ITfCompartment* open_close_comp_ = nullptr;
     DWORD open_close_sink_cookie_ = TF_INVALID_COOKIE;

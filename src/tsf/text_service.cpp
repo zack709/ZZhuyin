@@ -87,28 +87,6 @@ zzhuyin::EngineOutput ApplyOutputScript(
     return out;
 }
 
-bool IsCompartmentTrue(IUnknown* obj, REFGUID guid) {
-    if (!obj) return false;
-    ITfCompartmentMgr* comp_mgr = nullptr;
-    if (FAILED(obj->QueryInterface(
-            IID_ITfCompartmentMgr, reinterpret_cast<void**>(&comp_mgr))) || !comp_mgr) {
-        return false;
-    }
-    bool result = false;
-    ITfCompartment* comp = nullptr;
-    if (SUCCEEDED(comp_mgr->GetCompartment(guid, &comp)) && comp) {
-        VARIANT var{};
-        VariantInit(&var);
-        if (SUCCEEDED(comp->GetValue(&var)) && var.vt == VT_I4 && var.lVal != 0) {
-            result = true;
-        }
-        VariantClear(&var);
-        comp->Release();
-    }
-    comp_mgr->Release();
-    return result;
-}
-
 bool IsPasswordInputScope(InputScope scope) {
     switch (scope) {
     case IS_PASSWORD:
@@ -442,13 +420,76 @@ bool TextService::InitKeyEventSink() {
             kSymDesc, static_cast<ULONG>(wcslen(kSymDesc)));
     }
     ks_mgr->Release();
+    if (SUCCEEDED(hr)) {
+        SyncShiftPreservedKeys();
+    }
     return SUCCEEDED(hr);
+}
+
+void TextService::SyncShiftPreservedKeys() {
+    if (!thread_mgr_ || client_id_ == TF_CLIENTID_NULL) return;
+    ITfKeystrokeMgr* ks_mgr = nullptr;
+    if (FAILED(thread_mgr_->QueryInterface(
+            IID_ITfKeystrokeMgr, reinterpret_cast<void**>(&ks_mgr))) || !ks_mgr) {
+        return;
+    }
+
+    TF_PRESERVEDKEY pk_lshift{};
+    pk_lshift.uVKey = VK_SHIFT;
+    pk_lshift.uModifiers = TF_MOD_LSHIFT | TF_MOD_ON_KEYUP;
+
+    const bool want_lshift = config_.engine.left_shift_toggle_mode;
+    if (want_lshift && !lshift_preserved_) {
+        constexpr wchar_t kDesc[] = L"Toggle Chinese/English (Left Shift)";
+        if (SUCCEEDED(ks_mgr->PreserveKey(
+                client_id_, kGuidPreservedKeyToggleLeftShift, &pk_lshift,
+                kDesc, static_cast<ULONG>(wcslen(kDesc))))) {
+            lshift_preserved_ = true;
+        }
+    } else if (!want_lshift && lshift_preserved_) {
+        ks_mgr->UnpreserveKey(kGuidPreservedKeyToggleLeftShift, &pk_lshift);
+        lshift_preserved_ = false;
+    }
+
+    TF_PRESERVEDKEY pk_rshift{};
+    pk_rshift.uVKey = VK_SHIFT;
+    pk_rshift.uModifiers = TF_MOD_RSHIFT | TF_MOD_ON_KEYUP;
+
+    const bool want_rshift = config_.engine.right_shift_toggle_mode;
+    if (want_rshift && !rshift_preserved_) {
+        constexpr wchar_t kDesc[] = L"Toggle Chinese/English (Right Shift)";
+        if (SUCCEEDED(ks_mgr->PreserveKey(
+                client_id_, kGuidPreservedKeyToggleRightShift, &pk_rshift,
+                kDesc, static_cast<ULONG>(wcslen(kDesc))))) {
+            rshift_preserved_ = true;
+        }
+    } else if (!want_rshift && rshift_preserved_) {
+        ks_mgr->UnpreserveKey(kGuidPreservedKeyToggleRightShift, &pk_rshift);
+        rshift_preserved_ = false;
+    }
+
+    ks_mgr->Release();
 }
 
 void TextService::UninitKeyEventSink() {
     if (thread_mgr_ && client_id_ != TF_CLIENTID_NULL) {
         ITfKeystrokeMgr* ks_mgr = nullptr;
         if (SUCCEEDED(thread_mgr_->QueryInterface(IID_ITfKeystrokeMgr, reinterpret_cast<void**>(&ks_mgr)))) {
+            if (lshift_preserved_) {
+                TF_PRESERVEDKEY pk_lshift{};
+                pk_lshift.uVKey = VK_SHIFT;
+                pk_lshift.uModifiers = TF_MOD_LSHIFT | TF_MOD_ON_KEYUP;
+                ks_mgr->UnpreserveKey(kGuidPreservedKeyToggleLeftShift, &pk_lshift);
+                lshift_preserved_ = false;
+            }
+            if (rshift_preserved_) {
+                TF_PRESERVEDKEY pk_rshift{};
+                pk_rshift.uVKey = VK_SHIFT;
+                pk_rshift.uModifiers = TF_MOD_RSHIFT | TF_MOD_ON_KEYUP;
+                ks_mgr->UnpreserveKey(kGuidPreservedKeyToggleRightShift, &pk_rshift);
+                rshift_preserved_ = false;
+            }
+
             TF_PRESERVEDKEY pk{};
             pk.uVKey = VK_SPACE;
             pk.uModifiers = TF_MOD_CONTROL;
@@ -588,31 +629,17 @@ void TextService::DetachContextDisabledSink() {
 }
 
 bool TextService::IsPasswordContext(ITfContext* context) const {
-    if (!context) return false;
-
-    if (IsCompartmentTrue(context, GUID_COMPARTMENT_KEYBOARD_DISABLED) ||
-        IsCompartmentTrue(context, GUID_COMPARTMENT_EMPTYCONTEXT)) {
-        return true;
-    }
-
-    ITfDocumentMgr* doc_mgr = nullptr;
-    if (SUCCEEDED(context->GetDocumentMgr(&doc_mgr)) && doc_mgr) {
-        const bool doc_disabled =
-            IsCompartmentTrue(doc_mgr, GUID_COMPARTMENT_KEYBOARD_DISABLED) ||
-            IsCompartmentTrue(doc_mgr, GUID_COMPARTMENT_EMPTYCONTEXT);
-        doc_mgr->Release();
-        if (doc_disabled) return true;
-    }
-
-    if (IsContextInputScopePassword(context, client_id_)) {
+    if (context && IsContextInputScopePassword(context, client_id_)) {
         return true;
     }
 
     HWND hwnd = nullptr;
-    ITfContextView* view = nullptr;
-    if (SUCCEEDED(context->GetActiveView(&view)) && view) {
-        view->GetWnd(&hwnd);
-        view->Release();
+    if (context) {
+        ITfContextView* view = nullptr;
+        if (SUCCEEDED(context->GetActiveView(&view)) && view) {
+            view->GetWnd(&hwnd);
+            view->Release();
+        }
     }
     if (!hwnd) {
         hwnd = GetFocus();
@@ -720,6 +747,7 @@ void TextService::ApplyPersistedConfig(const PersistedConfig& cfg) {
     if (engine_) {
         engine_->SetConfig(cfg.engine);
     }
+    SyncShiftPreservedKeys();
     candidate_wnd_.SetOrientation(cfg.engine.orientation);
     candidate_wnd_.SetFontSizePt(cfg.ui.font_size_pt);
     candidate_wnd_.SetDarkTheme(cfg.ui.dark_theme);
@@ -891,12 +919,16 @@ STDMETHODIMP TextService::OnPreservedKey(
         return S_OK;
     }
 
-    if (IsEqualGUID(rguid, kGuidPreservedKeyToggleNative) && engine_) {
+    if ((IsEqualGUID(rguid, kGuidPreservedKeyToggleNative) ||
+         (IsEqualGUID(rguid, kGuidPreservedKeyToggleLeftShift) && config_.engine.left_shift_toggle_mode) ||
+         (IsEqualGUID(rguid, kGuidPreservedKeyToggleRightShift) && config_.engine.right_shift_toggle_mode)) &&
+        engine_) {
         engine_->SetNativeMode(!engine_->IsNativeMode());
+        engine_->Reset();
         candidate_wnd_.Hide();
         symbol_wnd_.Hide();
-        if (pic) {
-            TerminateComposition(pic);
+        if (ITfContext* ctx = pic ? pic : active_context_) {
+            TerminateComposition(ctx);
         }
         SyncOpenCloseCompartment();
         if (lang_bar_btn_) {
