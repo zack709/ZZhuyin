@@ -30,3 +30,6 @@ __pycache__/
 # Local Windows 7 reference binaries & dictionaries (do not commit copyrighted files)
 targets/
 plan.md
+
+# Local WinGet manifests
+manifests/
