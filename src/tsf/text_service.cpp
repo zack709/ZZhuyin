@@ -810,6 +810,12 @@ zzhuyin::KeyEvent TextService::TranslateKeyEvent(
         const UINT mapped = MapVirtualKeyW(scan_code, MAPVK_VSC_TO_VK_EX);
         if (mapped == VK_LSHIFT || mapped == VK_RSHIFT) {
             vk = mapped;
+        } else if (!is_key_up) {
+            if (GetKeyState(VK_LSHIFT) & 0x8000) {
+                vk = VK_LSHIFT;
+            } else if (GetKeyState(VK_RSHIFT) & 0x8000) {
+                vk = VK_RSHIFT;
+            }
         }
     } else if (vk == VK_CONTROL) {
         vk = is_extended ? VK_RCONTROL : VK_LCONTROL;
@@ -852,12 +858,20 @@ STDMETHODIMP TextService::OnTestKeyDown(
     }
     const auto ev = TranslateKeyEvent(wParam, lParam, /*is_key_up=*/false);
     const bool will_handle = engine_->WillHandleKey(ev);
-    if (!will_handle && engine_->State() != zzhuyin::EngineState::Idle) {
-        zzhuyin::ZhuyinEngine preview = *engine_;
-        preview.ProcessKey(ev);
-        if (preview.State() != engine_->State()) {
-            const auto out = engine_->ProcessKey(ev);
-            ApplyOutput(pic ? pic : active_context_, out);
+    if (!will_handle) {
+        if (engine_->State() != zzhuyin::EngineState::Idle) {
+            zzhuyin::ZhuyinEngine preview = *engine_;
+            preview.ProcessKey(ev);
+            if (preview.State() != engine_->State()) {
+                const auto out = engine_->ProcessKey(ev);
+                ApplyOutput(pic ? pic : active_context_, out);
+            } else {
+                // Keep Shift short-press / interruption tracking in sync even when unhandled
+                engine_->ProcessKey(ev);
+            }
+        } else {
+            // Track Shift KeyDown / interruption when Idle (TSF won't call OnKeyDown if *pfEaten == FALSE)
+            engine_->ProcessKey(ev);
         }
     }
     *pfEaten = will_handle ? TRUE : FALSE;
@@ -891,7 +905,12 @@ STDMETHODIMP TextService::OnTestKeyUp(
         return S_OK;
     }
     const auto ev = TranslateKeyEvent(wParam, lParam, /*is_key_up=*/true);
-    *pfEaten = engine_->WillHandleKey(ev) ? TRUE : FALSE;
+    const bool will_handle = engine_->WillHandleKey(ev);
+    if (!will_handle) {
+        // Clear pending Shift state when Shift was held too long or interrupted
+        engine_->ProcessKey(ev);
+    }
+    *pfEaten = will_handle ? TRUE : FALSE;
     return S_OK;
 }
 
@@ -905,7 +924,7 @@ STDMETHODIMP TextService::OnKeyUp(
     const auto ev = TranslateKeyEvent(wParam, lParam, /*is_key_up=*/true);
     const auto out = engine_->ProcessKey(ev);
     *pfEaten = out.handled ? TRUE : FALSE;
-    ApplyOutput(pic, out);
+    ApplyOutput(pic ? pic : active_context_, out);
     return S_OK;
 }
 
@@ -956,6 +975,9 @@ void TextService::ApplyOutput(ITfContext* context, const zzhuyin::EngineOutput& 
         MessageBeep(MB_OK);
     }
     if (out.mode_changed) {
+        if (context) {
+            TerminateComposition(context);
+        }
         SyncOpenCloseCompartment();
         if (lang_bar_btn_) {
             lang_bar_btn_->NotifyUpdate();

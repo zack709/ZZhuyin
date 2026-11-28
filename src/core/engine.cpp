@@ -123,7 +123,10 @@ bool ZhuyinEngine::HandleShiftShortPress(const KeyEvent& ev, EngineOutput& out) 
     }
 
     // KeyUp
-    if (pending_shift_vk_ != 0 && ev.vk_code == pending_shift_vk_) {
+    const bool matches_pending =
+        (pending_shift_vk_ != 0) &&
+        (ev.vk_code == pending_shift_vk_ || ev.vk_code == vk::kShift);
+    if (matches_pending) {
         const bool ok_time =
             (ev.timestamp_ms >= pending_shift_down_ms_) &&
             ((ev.timestamp_ms - pending_shift_down_ms_) < kShiftShortPressMaxMs);
